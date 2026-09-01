@@ -52,16 +52,74 @@ app.get('/api/services', (req, res) => {
 // MÜŞTƏRI MÜRACİƏTLƏRİ
 // =====================================================
 
-// Yeni muraciet yarat
-app.post('/api/requests', (req, res) => {
-  const { customer_name, phone, service_id, device_info, problem_description, address_text, latitude, longitude, visit_type } = req.body;
+// ====================================================
+// XİDMƏTLƏR (İctimai)
+// ====================================================
+app.get('/api/services', async (req, res) => {
+    try {
+        const { rows } = await db.query('SELECT * FROM services WHERE is_active = true ORDER BY category, name');
+        res.json(rows);
+    } catch (error) {
+        console.error('Xidmətlər alma xətası:', error);
+        res.status(500).json({ error: 'Server xətası baş verdi' });
+    }
+});
 
-  if (!customer_name || !phone || !problem_description) {
-    return res.status(400).json({ error: 'Ad, telefon ve problem izahi mecburidir' });
-  }
-  if (visit_type === 'evde' && !address_text) {
-    return res.status(400).json({ error: 'Evde xidmet ucun unvan gerekdir' });
-  }
+// ====================================================
+// MÜŞTƏRİ MÜRACİƏTLƏRİ
+// ====================================================
+app.post('/api/requests', async (req, res) => {
+    try {
+        const { 
+            customer_name, phone, service_id, device_info, 
+            problem_description, address_text, latitude, longitude, visit_type 
+        } = req.body;
+
+        if (!customer_name || !phone || !problem_description) {
+            return res.status(400).json({ error: 'Ad, telefon və problem izahı məcburidir' });
+        }
+
+        if (visit_type === 'evde' && !address_text) {
+            return res.status(400).json({ error: 'Evdə xidmət üçün ünvan gərəkdir' });
+        }
+
+        // Unikal izləmə kodu yaratmaq
+        let code;
+        let exists = true;
+        while (exists) {
+            code = genTrackingCode();
+            const check = await db.query('SELECT id FROM requests WHERE tracking_code = $1', [code]);
+            if (check.rows.length === 0) exists = false;
+        }
+
+        const queryText = `
+            INSERT INTO requests 
+            (tracking_code, customer_name, phone, service_id, device_info, problem_description, address_text, latitude, longitude, visit_type)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            RETURNING id
+        `;
+
+        const values = [
+            code, 
+            customer_name, 
+            phone, 
+            service_id || null, 
+            device_info || null, 
+            problem_description, 
+            address_text || null, 
+            latitude || null, 
+            longitude || null, 
+            visit_type || 'maqaza'
+        ];
+
+        const result = await db.query(queryText, values);
+
+        res.json({ success: true, id: result.rows[0].id, tracking_code: code });
+    } catch (error) {
+        console.error('Müraciət yaratma xətası:', error);
+        res.status(500).json({ error: 'Server xətası baş verdi' });
+    }
+});
 
   let code;
   do { code = genTrackingCode(); } while (db.prepare('SELECT id FROM requests WHERE tracking_code = ?').get(code));
