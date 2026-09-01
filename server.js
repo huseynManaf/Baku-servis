@@ -146,7 +146,7 @@ app.post('/api/requests', async (req, res) => {
     .run(info.lastInsertRowid, 'admin', 'Muraciətiniz qeyde alindi. Qisa zamanda sizinle elaqe saxlayacagiq.');
 
   res.json({ ok: true, tracking_code: code, id: info.lastInsertRowid });
-});
+
 
 // Muraciet melumatlarini izleme kodu + telefon ile gormek
 app.get('/api/requests/track', (req, res) => {
