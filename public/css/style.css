@@ -241,6 +241,15 @@ footer{border-top:1px solid var(--line);padding:44px 0;}
   .nav .container{height:64px}
   .nav .brand{font-size:18px}
   .nav-cta a{font-size:13px;padding:8px}
+
+  /* Improve header layout on very small screens: keep phone readable, prevent awkward breaks */
+  .nav .container{height:auto;align-items:center;padding:8px 14px;gap:8px;flex-wrap:wrap}
+  .nav .container{display:flex}
+  .brand{flex:0 1 auto;min-width:0}
+  .brand .dot{transform:scale(.9)}
+  .tel-badge{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 0 auto;font-size:13px}
+  .nav-cta{flex:0 1 auto;display:flex;align-items:center;gap:8px}
+  .nav-links{display:none}
 }
 
 /* Make modal inputs full width and larger touch targets */
