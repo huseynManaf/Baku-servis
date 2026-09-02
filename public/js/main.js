@@ -77,6 +77,8 @@ document.addEventListener('DOMContentLoaded', function () {
     authPhone.value = '';
     authModal.classList.add('open');
   }
+  // expose a global helper so inline onclick handlers can reliably open the modal
+  window.openAuthModal = openAuth;
   function closeAuth() { authModal.classList.remove('open'); }
   const authModalCloseBtn = document.getElementById('auth-modal-close');
   if (authModalCloseBtn) authModalCloseBtn.addEventListener('click', closeAuth);

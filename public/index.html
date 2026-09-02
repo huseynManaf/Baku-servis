@@ -28,7 +28,7 @@
         WhatsApp
       </a>
       <a class="btn btn-outline btn-sm" id="login-btn" href="javascript:void(0)">Daxil ol</a>
-      <a class="btn btn-outline btn-sm" id="register-btn" href="javascript:void(0)" onclick="(function(){var m=document.getElementById('auth-modal'); if(!m) return; var t=document.getElementById('auth-modal-title'); if(t) t.textContent='Qeydiyyat'; var pf=document.getElementById('auth-phone-field'); if(pf) pf.style.display='block'; var f=document.getElementById('auth-form'); if(f){ var btn=f.querySelector('button[type=submit]'); if(btn) btn.textContent='Qeydiyyat'; } m.classList.add('open');})();">Qeydiyyat</a>
+      <a class="btn btn-outline btn-sm" id="register-btn" href="javascript:void(0)" onclick="openAuthModal && openAuthModal('register'); return false;">Qeydiyyat</a>
       <a class="btn btn-primary btn-sm" id="account-btn" href="#muraciet" style="display:none">Mənim hesabım</a>
       <a class="btn btn-primary btn-sm" href="#muraciet">Müraciət et</a>
     </div>
