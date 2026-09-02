@@ -43,10 +43,7 @@ function publicRequest(row) {
 // =====================================================
 // XİDMƏTLƏR (ictimai - hər kəs görə bilər)
 // =====================================================
-app.get('/api/services', (req, res) => {
-  const rows = db.prepare('SELECT * FROM services WHERE is_active = 1 ORDER BY category, name').all();
-  res.json(rows);
-});
+// (Keçmiş SQLite-based route silindi — Postgres versiyası aşağıdadır)
 
 // =====================================================
 // MÜŞTƏRI MÜRACİƏTLƏRİ
@@ -121,104 +118,106 @@ app.post('/api/requests', async (req, res) => {
     }
 });
 
-  let code;
-  do { code = genTrackingCode(); } while (db.prepare('SELECT id FROM requests WHERE tracking_code = ?').get(code));
-
-  const stmt = db.prepare(`
-    INSERT INTO requests (tracking_code, customer_name, phone, service_id, device_info, problem_description, address_text, latitude, longitude, visit_type)
-    VALUES (@tracking_code, @customer_name, @phone, @service_id, @device_info, @problem_description, @address_text, @latitude, @longitude, @visit_type)
-  `);
-  const info = stmt.run({
-    tracking_code: code,
-    customer_name,
-    phone,
-    service_id: service_id || null,
-    device_info: device_info || null,
-    problem_description,
-    address_text: address_text || null,
-    latitude: latitude || null,
-    longitude: longitude || null,
-    visit_type: visit_type === 'evde' ? 'evde' : 'servis'
-  });
-
-  // Ilk mesaji sistem adindan chat-e yazaq
-  db.prepare('INSERT INTO messages (request_id, sender, body) VALUES (?, ?, ?)')
-    .run(info.lastInsertRowid, 'admin', 'Muraciətiniz qeyde alindi. Qisa zamanda sizinle elaqe saxlayacagiq.');
-
-  res.json({ ok: true, tracking_code: code, id: info.lastInsertRowid });
 
 
 // Muraciet melumatlarini izleme kodu + telefon ile gormek
-app.get('/api/requests/track', (req, res) => {
-  const { code, phone } = req.query;
-  if (!code || !phone) return res.status(400).json({ error: 'Kod ve telefon lazimdir' });
-  const row = db.prepare('SELECT * FROM requests WHERE tracking_code = ? AND phone = ?').get(code, phone);
-  if (!row) return res.status(404).json({ error: 'Muraciet tapilmadi' });
-  res.json(publicRequest(row));
+app.get('/api/requests/track', async (req, res) => {
+  try {
+    const { code, phone } = req.query;
+    if (!code || !phone) return res.status(400).json({ error: 'Kod ve telefon lazimdir' });
+    const result = await db.query('SELECT * FROM requests WHERE tracking_code = $1 AND phone = $2', [code, phone]);
+    const row = result.rows[0];
+    if (!row) return res.status(404).json({ error: 'Muraciet tapilmadi' });
+    res.json(publicRequest(row));
+  } catch (err) {
+    console.error('Tracking error:', err);
+    res.status(500).json({ error: 'Server xətası' });
+  }
 });
 
 // Chat mesajlarini gormek (musteri terefi - kod+telefon ile)
-app.get('/api/requests/:id/messages', (req, res) => {
-  const { code, phone } = req.query;
-  const reqRow = db.prepare('SELECT * FROM requests WHERE id = ?').get(req.params.id);
-  if (!reqRow) return res.status(404).json({ error: 'Tapilmadi' });
+app.get('/api/requests/:id/messages', async (req, res) => {
+  try {
+    const { code, phone } = req.query;
+    const reqRes = await db.query('SELECT * FROM requests WHERE id = $1', [req.params.id]);
+    const reqRow = reqRes.rows[0];
+    if (!reqRow) return res.status(404).json({ error: 'Tapilmadi' });
 
-  // Admin sessiyasi varsa avtomatik icaze, yoxdursa kod+telefon yoxlanilir
-  if (!(req.session && req.session.adminId)) {
-    if (reqRow.tracking_code !== code || reqRow.phone !== phone) {
-      return res.status(403).json({ error: 'Icaze yoxdur' });
+    if (!(req.session && req.session.adminId)) {
+      if (reqRow.tracking_code !== code || reqRow.phone !== phone) {
+        return res.status(403).json({ error: 'Icaze yoxdur' });
+      }
     }
+    const msgsRes = await db.query('SELECT * FROM messages WHERE request_id = $1 ORDER BY id ASC', [req.params.id]);
+    res.json(msgsRes.rows);
+  } catch (err) {
+    console.error('Get messages error:', err);
+    res.status(500).json({ error: 'Server xətası' });
   }
-  const msgs = db.prepare('SELECT * FROM messages WHERE request_id = ? ORDER BY id ASC').all(req.params.id);
-  res.json(msgs);
 });
 
 // Mushteri mesaj yazir
-app.post('/api/requests/:id/messages', (req, res) => {
-  const { code, phone, body } = req.body;
-  if (!body || !body.trim()) return res.status(400).json({ error: 'Bosh mesaj' });
-  const reqRow = db.prepare('SELECT * FROM requests WHERE id = ?').get(req.params.id);
-  if (!reqRow) return res.status(404).json({ error: 'Tapilmadi' });
-  if (reqRow.tracking_code !== code || reqRow.phone !== phone) {
-    return res.status(403).json({ error: 'Icaze yoxdur' });
+app.post('/api/requests/:id/messages', async (req, res) => {
+  try {
+    const { code, phone, body } = req.body;
+    if (!body || !body.trim()) return res.status(400).json({ error: 'Bosh mesaj' });
+    const reqRes = await db.query('SELECT * FROM requests WHERE id = $1', [req.params.id]);
+    const reqRow = reqRes.rows[0];
+    if (!reqRow) return res.status(404).json({ error: 'Tapilmadi' });
+    if (reqRow.tracking_code !== code || reqRow.phone !== phone) {
+      return res.status(403).json({ error: 'Icaze yoxdur' });
+    }
+    await db.query('INSERT INTO messages (request_id, sender, body) VALUES ($1, $2, $3)', [req.params.id, 'customer', body.trim()]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Post customer message error:', err);
+    res.status(500).json({ error: 'Server xətası' });
   }
-  db.prepare('INSERT INTO messages (request_id, sender, body) VALUES (?, ?, ?)').run(req.params.id, 'customer', body.trim());
-  res.json({ ok: true });
 });
 
 // Mock onlayn odenish - mushteri "kart ile ode" deyende
-app.post('/api/requests/:id/pay', (req, res) => {
-  const { code, phone, method } = req.body;
-  const reqRow = db.prepare('SELECT * FROM requests WHERE id = ?').get(req.params.id);
-  if (!reqRow) return res.status(404).json({ error: 'Tapilmadi' });
-  if (reqRow.tracking_code !== code || reqRow.phone !== phone) return res.status(403).json({ error: 'Icaze yoxdur' });
-  const amount = reqRow.final_price || reqRow.quoted_price;
-  if (!amount) return res.status(400).json({ error: 'Hele qiymet tesdiqlenmeyib' });
+app.post('/api/requests/:id/pay', async (req, res) => {
+  try {
+    const { code, phone, method } = req.body;
+    const reqRes = await db.query('SELECT * FROM requests WHERE id = $1', [req.params.id]);
+    const reqRow = reqRes.rows[0];
+    if (!reqRow) return res.status(404).json({ error: 'Tapilmadi' });
+    if (reqRow.tracking_code !== code || reqRow.phone !== phone) return res.status(403).json({ error: 'Icaze yoxdur' });
+    const amount = reqRow.final_price || reqRow.quoted_price;
+    if (!amount) return res.status(400).json({ error: 'Hele qiymet tesdiqlenmeyib' });
 
-  const info = db.prepare('INSERT INTO payments (request_id, amount, method, status) VALUES (?, ?, ?, ?)')
-    .run(req.params.id, amount, method || 'card', 'gozleyir');
+    const payRes = await db.query('INSERT INTO payments (request_id, amount, method, status) VALUES ($1, $2, $3, $4) RETURNING id', [req.params.id, amount, method || 'card', 'gozleyir']);
+    const paymentId = payRes.rows[0].id;
 
-  // === DEMO REJIMI ===
-  // Bu bloku real bank/PSP (mes: Payriff, AzeriCard, Kapital Bank E-manat) inteqrasiyasi ile evez edin.
-  // Hazirda yalniz simulyasiya edir - odenishi avtomatik "odenildi" statusuna kechirir.
-  db.prepare('UPDATE payments SET status = ? WHERE id = ?').run('odenildi', info.lastInsertRowid);
-  db.prepare('UPDATE requests SET is_paid = 1 WHERE id = ?').run(req.params.id);
+    // DEMO: avtomatik ödəniş tamamlandı kimi göstərin
+    await db.query('UPDATE payments SET status = $1 WHERE id = $2', ['odenildi', paymentId]);
+    await db.query('UPDATE requests SET is_paid = 1 WHERE id = $1', [req.params.id]);
 
-  res.json({ ok: true, payment_id: info.lastInsertRowid, amount, status: 'odenildi', demo: true });
+    res.json({ ok: true, payment_id: paymentId, amount, status: 'odenildi', demo: true });
+  } catch (err) {
+    console.error('Payment error:', err);
+    res.status(500).json({ error: 'Server xətası' });
+  }
 });
 
 // =====================================================
 // ADMIN - GİRİŞ
 // =====================================================
-app.post('/api/admin/login', (req, res) => {
-  const { username, password } = req.body;
-  const admin = db.prepare('SELECT * FROM admins WHERE username = ?').get(username);
-  if (!admin || !bcrypt.compareSync(password || '', admin.password_hash)) {
-    return res.status(401).json({ error: 'Istifadeci adi ve ya shifre yanlishdir' });
+app.post('/api/admin/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const result = await db.query('SELECT * FROM admins WHERE username = $1', [username]);
+    const admin = result.rows[0];
+    if (!admin || !bcrypt.compareSync(password || '', admin.password_hash)) {
+      return res.status(401).json({ error: 'Istifadeci adi ve ya shifre yanlishdir' });
+    }
+    req.session.adminId = admin.id;
+    req.session.adminUser = admin.username;
+    res.json({ ok: true, username: admin.username });
+  } catch (err) {
+    console.error('Admin login error:', err);
+    res.status(500).json({ error: 'Server xətası' });
   }
-  req.session.adminId = admin.id;
-  req.session.adminUser = admin.username;
-  res.json({ ok: true, username: admin.username });
 });
 
 app.post('/api/admin/logout', (req, res) => {
@@ -233,109 +232,148 @@ app.get('/api/admin/me', (req, res) => {
 // =====================================================
 // ADMIN - MÜRACİƏTLƏR
 // =====================================================
-app.get('/api/admin/requests', requireAdmin, (req, res) => {
-  const { status } = req.query;
-  let rows;
-  if (status && status !== 'hamisi') {
-    rows = db.prepare(`
-      SELECT r.*, s.name AS service_name FROM requests r
-      LEFT JOIN services s ON s.id = r.service_id
-      WHERE r.status = ? ORDER BY r.created_at DESC`).all(status);
-  } else {
-    rows = db.prepare(`
-      SELECT r.*, s.name AS service_name FROM requests r
-      LEFT JOIN services s ON s.id = r.service_id
-      ORDER BY r.created_at DESC`).all();
+app.get('/api/admin/requests', requireAdmin, async (req, res) => {
+  try {
+    const { status } = req.query;
+    let q, params = [];
+    if (status && status !== 'hamisi') {
+      q = `SELECT r.*, s.name AS service_name FROM requests r LEFT JOIN services s ON s.id = r.service_id WHERE r.status = $1 ORDER BY r.created_at DESC`;
+      params = [status];
+    } else {
+      q = `SELECT r.*, s.name AS service_name FROM requests r LEFT JOIN services s ON s.id = r.service_id ORDER BY r.created_at DESC`;
+    }
+    const result = await db.query(q, params);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Admin requests list error:', err);
+    res.status(500).json({ error: 'Server xətası' });
   }
-  res.json(rows);
 });
 
-app.get('/api/admin/requests/:id', requireAdmin, (req, res) => {
-  const row = db.prepare(`
-    SELECT r.*, s.name AS service_name FROM requests r
-    LEFT JOIN services s ON s.id = r.service_id WHERE r.id = ?`).get(req.params.id);
-  if (!row) return res.status(404).json({ error: 'Tapilmadi' });
-  const messages = db.prepare('SELECT * FROM messages WHERE request_id = ? ORDER BY id ASC').all(req.params.id);
-  const payments = db.prepare('SELECT * FROM payments WHERE request_id = ? ORDER BY id DESC').all(req.params.id);
-  res.json({ request: row, messages, payments });
+app.get('/api/admin/requests/:id', requireAdmin, async (req, res) => {
+  try {
+    const reqRes = await db.query(`SELECT r.*, s.name AS service_name FROM requests r LEFT JOIN services s ON s.id = r.service_id WHERE r.id = $1`, [req.params.id]);
+    const row = reqRes.rows[0];
+    if (!row) return res.status(404).json({ error: 'Tapilmadi' });
+    const messagesRes = await db.query('SELECT * FROM messages WHERE request_id = $1 ORDER BY id ASC', [req.params.id]);
+    const paymentsRes = await db.query('SELECT * FROM payments WHERE request_id = $1 ORDER BY id DESC', [req.params.id]);
+    res.json({ request: row, messages: messagesRes.rows, payments: paymentsRes.rows });
+  } catch (err) {
+    console.error('Admin get request error:', err);
+    res.status(500).json({ error: 'Server xətası' });
+  }
 });
 
-app.put('/api/admin/requests/:id', requireAdmin, (req, res) => {
-  const { status, quoted_price, final_price } = req.body;
-  const fields = [];
-  const values = {};
-  if (status) { fields.push('status = @status'); values.status = status; }
-  if (quoted_price !== undefined) { fields.push('quoted_price = @quoted_price'); values.quoted_price = quoted_price; }
-  if (final_price !== undefined) { fields.push('final_price = @final_price'); values.final_price = final_price; }
-  if (!fields.length) return res.status(400).json({ error: 'Deyishiklik yoxdur' });
-  fields.push("updated_at = datetime('now')");
-  values.id = req.params.id;
-  db.prepare(`UPDATE requests SET ${fields.join(', ')} WHERE id = @id`).run(values);
-  res.json({ ok: true });
+app.put('/api/admin/requests/:id', requireAdmin, async (req, res) => {
+  try {
+    const { status, quoted_price, final_price } = req.body;
+    const parts = [];
+    const params = [];
+    if (status) { params.push(status); parts.push(`status = $${params.length}`); }
+    if (quoted_price !== undefined) { params.push(quoted_price); parts.push(`quoted_price = $${params.length}`); }
+    if (final_price !== undefined) { params.push(final_price); parts.push(`final_price = $${params.length}`); }
+    if (!parts.length) return res.status(400).json({ error: 'Deyishiklik yoxdur' });
+    params.push(new Date().toISOString()); parts.push(`updated_at = $${params.length}`);
+    params.push(req.params.id);
+    const q = `UPDATE requests SET ${parts.join(', ')} WHERE id = $${params.length}`;
+    await db.query(q, params);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Admin update request error:', err);
+    res.status(500).json({ error: 'Server xətası' });
+  }
 });
 
 // Admin chat-e cavab yazir
-app.post('/api/admin/requests/:id/messages', requireAdmin, (req, res) => {
-  const { body } = req.body;
-  if (!body || !body.trim()) return res.status(400).json({ error: 'Bosh mesaj' });
-  db.prepare('INSERT INTO messages (request_id, sender, body) VALUES (?, ?, ?)').run(req.params.id, 'admin', body.trim());
-  res.json({ ok: true });
+app.post('/api/admin/requests/:id/messages', requireAdmin, async (req, res) => {
+  try {
+    const { body } = req.body;
+    if (!body || !body.trim()) return res.status(400).json({ error: 'Bosh mesaj' });
+    await db.query('INSERT INTO messages (request_id, sender, body) VALUES ($1, $2, $3)', [req.params.id, 'admin', body.trim()]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Admin post message error:', err);
+    res.status(500).json({ error: 'Server xətası' });
+  }
 });
 
 // =====================================================
 // ADMIN - XİDMƏTLƏR (əlavə et / redaktə / sil)
 // =====================================================
-app.get('/api/admin/services', requireAdmin, (req, res) => {
-  res.json(db.prepare('SELECT * FROM services ORDER BY category, name').all());
+app.get('/api/admin/services', requireAdmin, async (req, res) => {
+  try {
+    const result = await db.query('SELECT * FROM services ORDER BY category, name');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Admin services list error:', err);
+    res.status(500).json({ error: 'Server xətası' });
+  }
 });
 
-app.post('/api/admin/services', requireAdmin, (req, res) => {
-  const { name, category, description, price, discount_price } = req.body;
-  if (!name || price === undefined) return res.status(400).json({ error: 'Ad ve qiymet mecburidir' });
-  const info = db.prepare(`INSERT INTO services (name, category, description, price, discount_price) VALUES (?,?,?,?,?)`)
-    .run(name, category || 'umumi', description || '', price, discount_price || null);
-  res.json({ ok: true, id: info.lastInsertRowid });
+app.post('/api/admin/services', requireAdmin, async (req, res) => {
+  try {
+    const { name, category, description, price, discount_price } = req.body;
+    if (!name || price === undefined) return res.status(400).json({ error: 'Ad ve qiymet mecburidir' });
+    const result = await db.query('INSERT INTO services (name, category, description, price, discount_price) VALUES ($1,$2,$3,$4,$5) RETURNING id', [name, category || 'umumi', description || '', price, discount_price || null]);
+    res.json({ ok: true, id: result.rows[0].id });
+  } catch (err) {
+    console.error('Admin create service error:', err);
+    res.status(500).json({ error: 'Server xətası' });
+  }
 });
 
-app.put('/api/admin/services/:id', requireAdmin, (req, res) => {
-  const { name, category, description, price, discount_price, is_active } = req.body;
-  db.prepare(`
-    UPDATE services SET
-      name = COALESCE(@name, name),
-      category = COALESCE(@category, category),
-      description = COALESCE(@description, description),
-      price = COALESCE(@price, price),
-      discount_price = @discount_price,
-      is_active = COALESCE(@is_active, is_active),
-      updated_at = datetime('now')
-    WHERE id = @id
-  `).run({
-    id: req.params.id,
-    name: name ?? null,
-    category: category ?? null,
-    description: description ?? null,
-    price: price ?? null,
-    discount_price: discount_price === undefined ? null : discount_price,
-    is_active: is_active === undefined ? null : (is_active ? 1 : 0)
-  });
-  res.json({ ok: true });
+app.put('/api/admin/services/:id', requireAdmin, async (req, res) => {
+  try {
+    const { name, category, description, price, discount_price, is_active } = req.body;
+    const parts = [];
+    const params = [];
+    if (name !== undefined) { params.push(name); parts.push(`name = $${params.length}`); }
+    if (category !== undefined) { params.push(category); parts.push(`category = $${params.length}`); }
+    if (description !== undefined) { params.push(description); parts.push(`description = $${params.length}`); }
+    if (price !== undefined) { params.push(price); parts.push(`price = $${params.length}`); }
+    if (discount_price !== undefined) { params.push(discount_price); parts.push(`discount_price = $${params.length}`); }
+    if (is_active !== undefined) { params.push(is_active ? 1 : 0); parts.push(`is_active = $${params.length}`); }
+    parts.push(`updated_at = $${params.length + 1}`); params.push(new Date().toISOString());
+    params.push(req.params.id);
+    const q = `UPDATE services SET ${parts.join(', ')} WHERE id = $${params.length}`;
+    await db.query(q, params);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Admin update service error:', err);
+    res.status(500).json({ error: 'Server xətası' });
+  }
 });
 
-app.delete('/api/admin/services/:id', requireAdmin, (req, res) => {
-  db.prepare('DELETE FROM services WHERE id = ?').run(req.params.id);
-  res.json({ ok: true });
+app.delete('/api/admin/services/:id', requireAdmin, async (req, res) => {
+  try {
+    await db.query('DELETE FROM services WHERE id = $1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Admin delete service error:', err);
+    res.status(500).json({ error: 'Server xətası' });
+  }
 });
 
 // =====================================================
 // ADMIN - SADƏ STATİSTİKA
 // =====================================================
-app.get('/api/admin/stats', requireAdmin, (req, res) => {
-  const total = db.prepare('SELECT COUNT(*) c FROM requests').get().c;
-  const yeni = db.prepare("SELECT COUNT(*) c FROM requests WHERE status = 'yeni'").get().c;
-  const icrada = db.prepare("SELECT COUNT(*) c FROM requests WHERE status = 'icrada'").get().c;
-  const hazir = db.prepare("SELECT COUNT(*) c FROM requests WHERE status = 'hazir'").get().c;
-  const gelir = db.prepare("SELECT COALESCE(SUM(amount),0) s FROM payments WHERE status = 'odenildi'").get().s;
-  res.json({ total, yeni, icrada, hazir, gelir });
+app.get('/api/admin/stats', requireAdmin, async (req, res) => {
+  try {
+    const totalRes = await db.query('SELECT COUNT(*) AS c FROM requests');
+    const yeniRes = await db.query("SELECT COUNT(*) AS c FROM requests WHERE status = 'yeni'");
+    const icradaRes = await db.query("SELECT COUNT(*) AS c FROM requests WHERE status = 'icrada'");
+    const hazirRes = await db.query("SELECT COUNT(*) AS c FROM requests WHERE status = 'hazir'");
+    const gelirRes = await db.query("SELECT COALESCE(SUM(amount),0) AS s FROM payments WHERE status = 'odenildi'");
+    const total = parseInt(totalRes.rows[0].c, 10);
+    const yeni = parseInt(yeniRes.rows[0].c, 10);
+    const icrada = parseInt(icradaRes.rows[0].c, 10);
+    const hazir = parseInt(hazirRes.rows[0].c, 10);
+    const gelir = parseFloat(gelirRes.rows[0].s);
+    res.json({ total, yeni, icrada, hazir, gelir });
+  } catch (err) {
+    console.error('Admin stats error:', err);
+    res.status(500).json({ error: 'Server xətası' });
+  }
 });
 
 // ---------- Xeta idaresi (bazani ayaqda saxlamaq ucun) ----------
