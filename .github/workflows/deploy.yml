@@ -1,0 +1,53 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Package repo
+        run: |
+          tar -czf release.tar.gz --exclude='.git' --exclude='node_modules' --exclude='.github' .
+
+      - name: Copy archive to server
+        uses: appleboy/scp-action@v0.1.6
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          source: "release.tar.gz"
+          target: ${{ secrets.REMOTE_PATH }}
+
+      - name: Remote deploy and restart
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            set -e
+            cd "${{ secrets.REMOTE_PATH }}"
+            tar -xzf release.tar.gz -C .
+            npm install --production
+            if command -v pm2 >/dev/null 2>&1; then
+              pm2 restart all || pm2 start server.js --name hugu-servis
+            else
+              if systemctl list-units --type=service --all | grep -q hugu-servis; then
+                sudo systemctl restart hugu-servis
+              else
+                echo "No pm2 or systemd service found — you may need to restart manually"
+              fi
+            fi
