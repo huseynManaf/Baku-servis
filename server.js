@@ -35,6 +35,52 @@ function requireAdmin(req, res, next) {
   return res.status(401).json({ error: 'Giris teleb olunur' });
 }
 
+async function ensureAdminsTableAndDefault() {
+  // Try to create admins table if missing and optionally insert default admin
+  try {
+    // Try Postgres-style table creation first (SERIAL)
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS admins (
+          id SERIAL PRIMARY KEY,
+          username TEXT UNIQUE NOT NULL,
+          password_hash TEXT NOT NULL,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+        )
+      `);
+    } catch (e2) {
+      // If Postgres-style failed (e.g., running on SQLite), try a SQLite-compatible DDL
+      try {
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS admins (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now'))
+          )
+        `);
+      } catch (e3) {
+        console.error('Failed to create admins table with both Postgres and SQLite DDL:', e3);
+      }
+    }
+
+    const defUser = process.env.DEFAULT_ADMIN_USER;
+    const defPass = process.env.DEFAULT_ADMIN_PASS;
+    if (defUser && defPass) {
+      const check = await db.query('SELECT id FROM admins WHERE username = $1', [defUser]);
+      if (!check.rows || check.rows.length === 0) {
+        const hash = bcrypt.hashSync(defPass, 10);
+        await db.query('INSERT INTO admins (username, password_hash) VALUES ($1, $2)', [defUser, hash]);
+        console.log('Default admin created from environment variable DEFAULT_ADMIN_USER');
+      }
+    }
+  } catch (e) {
+    // Non-fatal: log and continue. Upstream handlers will surface errors to client.
+    console.error('ensureAdminsTableAndDefault error:');
+    console.error(e);
+  }
+}
+
 function publicRequest(row) {
   // mushteriye/adminə qaytarilan zaman heç bir gizli sahə yoxdur, sadece formatlayiriq
   return row;
@@ -212,6 +258,8 @@ app.post('/api/requests/:id/pay', async (req, res) => {
 app.post('/api/admin/login', async (req, res) => {
   try {
     const { username, password } = req.body;
+    // Ensure admins table exists and optionally create a default admin from env
+    await ensureAdminsTableAndDefault();
     const result = await db.query('SELECT * FROM admins WHERE username = $1', [username]);
     const admin = result.rows[0];
     if (!admin || !bcrypt.compareSync(password || '', admin.password_hash)) {
@@ -222,7 +270,11 @@ app.post('/api/admin/login', async (req, res) => {
     res.json({ ok: true, username: admin.username });
   } catch (err) {
     console.error('Admin login error:');
-    console.error(err && err.stack ? err.stack : err);
+    console.error(err);
+    // If the error indicates missing relation/table, provide actionable message
+    if (err && err.code === '42P01') {
+      return res.status(500).json({ error: 'Verilənlər bazasında `admins` cədvəli yoxdur', details: err.message });
+    }
     res.status(500).json({ error: 'Server xətası', details: err && err.message ? err.message : String(err) });
   }
 });

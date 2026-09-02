@@ -35,7 +35,7 @@
     });
     const data = await res.json();
     const msg = el('#login-msg');
-    if (!res.ok) { msg.className = 'form-msg err'; msg.textContent = data.error; return; }
+    if (!res.ok) { msg.className = 'form-msg err'; msg.textContent = data.error || data.details || JSON.stringify(data); return; }
     msg.className = 'form-msg'; msg.textContent = '';
     checkAuth();
   });
