@@ -625,14 +625,33 @@ app.get('/api/services/version', (req, res) => {
 // Regular user registration/login
 app.post('/api/register', async (req, res) => {
   try {
-    const { username, password, phone } = req.body || {};
+    let { username, password, phone } = req.body || {};
+    username = (username || '').toString().trim().slice(0,80);
+    password = (password || '').toString();
+    phone = phone ? phone.toString().trim().slice(0,40) : null;
     if (!username || !password) return res.status(400).json({ error: 'username and password required' });
+
+    // Check existing username first to return friendly error
+    try {
+      const chk = await db.query('SELECT id FROM users WHERE username = $1', [username]);
+      if (chk.rows && chk.rows.length) return res.status(409).json({ error: 'username_taken', details: 'Bu istifadəçi adı artıq mövcuddur' });
+    } catch (e) {
+      // ignore check failures and try insert; fallback
+    }
+
     const hash = bcrypt.hashSync(password, 10);
-    const result = await db.query('INSERT INTO users (username, password_hash, phone) VALUES ($1,$2,$3) RETURNING id, username', [username, hash, phone || null]);
-    const user = result.rows[0];
-    req.session.userId = user.id;
-    req.session.username = user.username;
-    res.json({ ok: true, id: user.id, username: user.username });
+    try {
+      const result = await db.query('INSERT INTO users (username, password_hash, phone) VALUES ($1,$2,$3) RETURNING id, username', [username, hash, phone || null]);
+      const user = result.rows[0];
+      req.session.userId = user.id;
+      req.session.username = user.username;
+      res.json({ ok: true, id: user.id, username: user.username });
+    } catch (errInsert) {
+      // Duplicate key handling for Postgres/SQLite
+      const msg = (errInsert && errInsert.code === '23505') || (errInsert && /unique/i.test(String(errInsert.message || '')));
+      if (msg) return res.status(409).json({ error: 'username_taken', details: 'Bu istifadəçi adı artıq mövcuddur' });
+      throw errInsert;
+    }
   } catch (err) {
     console.error('Register error:', err);
     res.status(500).json({ error: 'Server xətası', details: err && err.message ? err.message : String(err) });

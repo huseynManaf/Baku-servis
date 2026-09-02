@@ -224,6 +224,29 @@ footer{border-top:1px solid var(--line);padding:44px 0;}
   .modal{padding:18px}
 }
 
+/* Mobile form and modal full-screen adjustments */
+@media (max-width:420px){
+  .container{padding:0 14px}
+  .form-card{padding:18px}
+  .form-row{grid-template-columns:1fr}
+  .field label{font-size:13px}
+  .field input, .field select, .field textarea{font-size:16px;padding:12px;border-radius:8px}
+  .btn{padding:12px 14px;font-size:15px}
+  .modal{max-width:100%;height:100%;border-radius:0;padding:18px;align-self:flex-end}
+  .modal-overlay{padding:0}
+  .chat-box{height:320px}
+  .svc-card{padding:16px}
+  table{font-size:13px}
+  th,td{padding:10px}
+  .nav .container{height:64px}
+  .nav .brand{font-size:18px}
+  .nav-cta a{font-size:13px;padding:8px}
+}
+
+/* Make modal inputs full width and larger touch targets */
+.modal .field input, .modal .field select, .modal .field textarea{width:100%;font-size:16px;padding:12px}
+
+
 /* =========================================================
    ADMIN PANEL
    ========================================================= */
