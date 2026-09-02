@@ -81,6 +81,61 @@ async function ensureAdminsTableAndDefault() {
   }
 }
 
+async function ensureMessagesAndPayments() {
+  try {
+    // Postgres-style DDL
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS messages (
+          id SERIAL PRIMARY KEY,
+          request_id INTEGER NOT NULL,
+          sender TEXT NOT NULL,
+          body TEXT NOT NULL,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+        )
+      `);
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS payments (
+          id SERIAL PRIMARY KEY,
+          request_id INTEGER NOT NULL,
+          amount NUMERIC NOT NULL,
+          method TEXT,
+          status TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+        )
+      `);
+    } catch (e2) {
+      // Try SQLite-compatible DDL
+      try {
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            request_id INTEGER NOT NULL,
+            sender TEXT NOT NULL,
+            body TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now'))
+          )
+        `);
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            request_id INTEGER NOT NULL,
+            amount REAL NOT NULL,
+            method TEXT,
+            status TEXT,
+            created_at TEXT DEFAULT (datetime('now'))
+          )
+        `);
+      } catch (e3) {
+        console.error('Failed to create messages/payments tables with both Postgres and SQLite DDL:', e3);
+      }
+    }
+  } catch (err) {
+    console.error('ensureMessagesAndPayments error:');
+    console.error(err);
+  }
+}
+
 function publicRequest(row) {
   // mushteriye/adminə qaytarilan zaman heç bir gizli sahə yoxdur, sadece formatlayiriq
   return row;
@@ -350,9 +405,23 @@ app.get('/api/admin/requests/:id', requireAdmin, async (req, res) => {
     const reqRes = await db.query(`SELECT r.*, s.name AS service_name FROM requests r LEFT JOIN services s ON s.id = r.service_id WHERE r.id = $1`, [req.params.id]);
     const row = reqRes.rows[0];
     if (!row) return res.status(404).json({ error: 'Tapilmadi' });
-    const messagesRes = await db.query('SELECT * FROM messages WHERE request_id = $1 ORDER BY id ASC', [req.params.id]);
-    const paymentsRes = await db.query('SELECT * FROM payments WHERE request_id = $1 ORDER BY id DESC', [req.params.id]);
-    res.json({ request: row, messages: messagesRes.rows, payments: paymentsRes.rows });
+    let messages = [];
+    let payments = [];
+    try {
+      const messagesRes = await db.query('SELECT * FROM messages WHERE request_id = $1 ORDER BY id ASC', [req.params.id]);
+      messages = messagesRes.rows || [];
+    } catch (e) {
+      console.error('Failed to load messages for request', req.params.id, e && e.message ? e.message : e);
+      messages = [];
+    }
+    try {
+      const paymentsRes = await db.query('SELECT * FROM payments WHERE request_id = $1 ORDER BY id DESC', [req.params.id]);
+      payments = paymentsRes.rows || [];
+    } catch (e) {
+      console.error('Failed to load payments for request', req.params.id, e && e.message ? e.message : e);
+      payments = [];
+    }
+    res.json({ request: row, messages, payments });
   } catch (err) {
     console.error('Admin get request error:');
     console.error(err && err.stack ? err.stack : err);
@@ -461,16 +530,30 @@ app.delete('/api/admin/services/:id', requireAdmin, async (req, res) => {
 // =====================================================
 app.get('/api/admin/stats', requireAdmin, async (req, res) => {
   try {
-    const totalRes = await db.query('SELECT COUNT(*) AS c FROM requests');
-    const yeniRes = await db.query("SELECT COUNT(*) AS c FROM requests WHERE status = 'yeni'");
-    const icradaRes = await db.query("SELECT COUNT(*) AS c FROM requests WHERE status = 'icrada'");
-    const hazirRes = await db.query("SELECT COUNT(*) AS c FROM requests WHERE status = 'hazir'");
-    const gelirRes = await db.query("SELECT COALESCE(SUM(amount),0) AS s FROM payments WHERE status = 'odenildi'");
-    const total = parseInt(totalRes.rows[0].c, 10);
-    const yeni = parseInt(yeniRes.rows[0].c, 10);
-    const icrada = parseInt(icradaRes.rows[0].c, 10);
-    const hazir = parseInt(hazirRes.rows[0].c, 10);
-    const gelir = parseFloat(gelirRes.rows[0].s);
+    let total = 0, yeni = 0, icrada = 0, hazir = 0, gelir = 0.0;
+    try {
+      const totalRes = await db.query('SELECT COUNT(*) AS c FROM requests');
+      total = parseInt(totalRes.rows[0].c, 10);
+    } catch (e) {
+      console.error('Failed to count requests total:', e && e.message ? e.message : e);
+      total = 0;
+    }
+    try {
+      const yeniRes = await db.query("SELECT COUNT(*) AS c FROM requests WHERE status = 'yeni'");
+      yeni = parseInt(yeniRes.rows[0].c, 10);
+    } catch (e) { console.error('Failed to count yeni:', e && e.message ? e.message : e); yeni = 0; }
+    try {
+      const icradaRes = await db.query("SELECT COUNT(*) AS c FROM requests WHERE status = 'icrada'");
+      icrada = parseInt(icradaRes.rows[0].c, 10);
+    } catch (e) { console.error('Failed to count icrada:', e && e.message ? e.message : e); icrada = 0; }
+    try {
+      const hazirRes = await db.query("SELECT COUNT(*) AS c FROM requests WHERE status = 'hazir'");
+      hazir = parseInt(hazirRes.rows[0].c, 10);
+    } catch (e) { console.error('Failed to count hazir:', e && e.message ? e.message : e); hazir = 0; }
+    try {
+      const gelirRes = await db.query("SELECT COALESCE(SUM(amount),0) AS s FROM payments WHERE status = 'odenildi'");
+      gelir = parseFloat(gelirRes.rows[0].s);
+    } catch (e) { console.error('Failed to sum gelir:', e && e.message ? e.message : e); gelir = 0.0; }
     res.json({ total, yeni, icrada, hazir, gelir });
   } catch (err) {
     console.error('Admin stats error:');
@@ -489,6 +572,15 @@ app.use((err, req, res, next) => {
 process.on('unhandledRejection', (e) => console.error('[unhandledRejection]', e));
 process.on('uncaughtException', (e) => console.error('[uncaughtException]', e));
 
-app.listen(PORT, () => {
-  console.log(`HUGU Servis ${PORT} portunda ishe dushdu -> http://localhost:${PORT}`);
-});
+// Initialize essential tables (admins, messages, payments) before listening
+(async () => {
+  try {
+    await ensureAdminsTableAndDefault();
+    await ensureMessagesAndPayments();
+  } catch (e) {
+    console.error('Startup table initialization error:', e);
+  }
+  app.listen(PORT, () => {
+    console.log(`HUGU Servis ${PORT} portunda ishe dushdu -> http://localhost:${PORT}`);
+  });
+})();
