@@ -55,6 +55,38 @@ document.addEventListener('DOMContentLoaded', function () {
     return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
+  // ---------- Toast notifications ----------
+  function showToast(type, message, timeout = 4000) {
+    try {
+      const container = document.getElementById('toast-container');
+      if (!container) return;
+      const t = document.createElement('div');
+      t.className = 'toast ' + (type === 'error' ? 'toast-err' : 'toast-ok');
+      t.textContent = message;
+      container.appendChild(t);
+      setTimeout(() => t.classList.add('visible'), 20);
+      setTimeout(() => {
+        t.classList.remove('visible');
+        setTimeout(() => t.remove(), 300);
+      }, timeout);
+    } catch (e) { console.error('showToast error', e); }
+  }
+
+  function setButtonLoading(btn, loading, text) {
+    if (!btn) return;
+    if (loading) {
+      btn.dataset.orig = btn.innerHTML;
+      btn.classList.add('loading');
+      btn.innerHTML = (text || btn.textContent) + ' <span class="spinner" aria-hidden="true"></span>';
+      btn.disabled = true;
+    } else {
+      btn.classList.remove('loading');
+      if (btn.dataset.orig) btn.innerHTML = btn.dataset.orig;
+      btn.disabled = false;
+      delete btn.dataset.orig;
+    }
+  }
+
   // ---------- Auth UI (login / register) ----------
   const authModal = el('#auth-modal');
   const authForm = document.getElementById('auth-form');
@@ -98,13 +130,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (accountBtn) {
           accountBtn.style.display = 'inline-flex';
           accountBtn.textContent = 'Hesabım (' + (j.username || '') + ')';
-          accountBtn.onclick = async (e) => {
-            // clicking account acts as logout for now
-            e && e.preventDefault && e.preventDefault();
-            if (!confirm('Çıxış etmək istəyirsiniz?')) return;
-            await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
-            checkAuth();
-          };
+          accountBtn.onclick = (e) => { e && e.preventDefault && e.preventDefault(); openAccount(); };
         }
       } else {
         if (loginBtn) {
@@ -120,26 +146,94 @@ document.addEventListener('DOMContentLoaded', function () {
     } catch (e) { console.error('checkAuth error', e); }
   }
 
-  if (authForm) {
-    authForm.addEventListener('submit', async (ev) => {
-    ev.preventDefault();
-    authMsg.style.display = 'none'; authMsg.textContent = '';
-    const payload = { username: authUsername.value.trim(), password: authPassword.value };
-    if (authMode === 'register') payload.phone = authPhone.value.trim();
+  // ---------- Account / user requests ----------
+  function openAccount() {
+    const acc = el('#account-section');
+    if (!acc) return;
+    acc.style.display = 'block';
+    acc.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    loadUserRequests();
+  }
+
+  async function loadUserRequests() {
+    const container = el('#account-requests');
+    if (!container) return;
+    container.innerHTML = '<div class="hint">Yüklənir...</div>';
     try {
-      const url = authMode === 'register' ? '/api/register' : '/api/login';
-      const r = await fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      const j = await r.json();
-      if (!r.ok) {
-        authMsg.style.display = 'block'; authMsg.className = 'form-msg err'; authMsg.textContent = j.error || j.details || 'Xəta';
+      const res = await fetch('/api/user/requests', { credentials: 'same-origin' });
+      if (!res.ok) {
+        container.innerHTML = '<div class="hint">Müraciətlər yüklənə bilmədi</div>';
         return;
       }
-      closeAuth();
-      checkAuth();
-    } catch (err) {
-      authMsg.style.display = 'block'; authMsg.className = 'form-msg err'; authMsg.textContent = err.message || 'Xəta';
+      const rows = await res.json();
+      if (!rows || !rows.length) {
+        container.innerHTML = '<div class="hint">Heç bir müraciət tapılmadı</div>';
+        return;
+      }
+      container.innerHTML = rows.map(r => `
+        <div class="ticket" style="margin-bottom:10px;">
+          <div>
+            <div class="tname">${escapeHtml(r.service_name || r.device_info || ('#' + (r.tracking_code || r.id)) )}</div>
+            <div class="tdev">${escapeHtml(r.device_info || r.problem_description || '')}</div>
+            <div class="hint">Kod: ${escapeHtml(r.tracking_code || '')} · ${new Date(r.created_at || '').toLocaleString()}</div>
+          </div>
+          <div style="text-align:right">
+            <span class="status-chip status-${r.status}">${escapeHtml(r.status)}</span>
+          </div>
+        </div>
+      `).join('');
+    } catch (e) {
+      console.error('loadUserRequests error', e);
+      container.innerHTML = '<div class="hint">Xəta baş verdi</div>';
     }
-  });
+  }
+
+  // account logout button hookup
+  const accountLogoutBtn = document.getElementById('account-logout');
+  if (accountLogoutBtn) {
+    accountLogoutBtn.addEventListener('click', async (e) => {
+      e && e.preventDefault && e.preventDefault();
+      try {
+        await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
+        showToast('success', 'Çıxış edildi');
+        checkAuth();
+        const acc = el('#account-section'); if (acc) acc.style.display = 'none';
+      } catch (err) {
+        showToast('error', 'Çıxış alınmadı');
+      }
+    });
+  }
+
+  if (authForm) {
+    authForm.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      authMsg.style.display = 'none'; authMsg.textContent = '';
+      const payload = { username: authUsername.value.trim(), password: authPassword.value };
+      if (authMode === 'register') payload.phone = authPhone.value.trim();
+      const submitBtn = authForm.querySelector('button[type=submit]');
+      try {
+        setButtonLoading(submitBtn, true, authForm.querySelector('button[type=submit]').textContent);
+        const url = authMode === 'register' ? '/api/register' : '/api/login';
+        const r = await fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          const msg = j.error || j.details || (j.message || 'Xəta');
+          showToast('error', msg);
+          authMsg.style.display = 'block'; authMsg.className = 'form-msg err'; authMsg.textContent = msg;
+          setButtonLoading(submitBtn, false);
+          return;
+        }
+        showToast('success', authMode === 'register' ? 'Qeydiyyat uğurlu oldu' : 'Daxil olundu');
+        closeAuth();
+        await checkAuth();
+      } catch (err) {
+        const msg = err && err.message ? err.message : 'Xəta';
+        showToast('error', msg);
+        authMsg.style.display = 'block'; authMsg.className = 'form-msg err'; authMsg.textContent = msg;
+      } finally {
+        setButtonLoading(submitBtn, false);
+      }
+    });
 
   }
 
@@ -193,31 +287,38 @@ document.addEventListener('DOMContentLoaded', function () {
     const msgBox = el('#form-msg');
     msgBox.className = 'form-msg';
     msgBox.textContent = '';
-
+    const submitBtn = form.querySelector('button[type=submit]');
     try {
+      setButtonLoading(submitBtn, true, submitBtn.textContent);
       const res = await fetch('/api/requests', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         const detail = data.error || data.details || 'Xəta baş verdi';
-        throw new Error(detail);
+        showToast('error', detail);
+        msgBox.className = 'form-msg err';
+        msgBox.textContent = detail;
+        return;
       }
-
       msgBox.className = 'form-msg ok';
-      msgBox.textContent = `Müraciətiniz qeydə alındı! İzləmə kodunuz: ${data.tracking_code} — bu kodu telefon nömrənizlə birlikdə saxlayın, "Sifarişimi izlə" bölməsindən statusu görə bilərsiniz.`;
+      msgBox.textContent = `Müraciətiniz qeydə alındı! İzləmə kodunuz: ${data.tracking_code}`;
+      showToast('success', 'Müraciətiniz qeydə alındı');
       form.reset();
       addressField.style.display = 'none';
       els('.radio-opt', visitGroup).forEach(o => o.classList.remove('active'));
       el('.radio-opt[data-val="servis"]', visitGroup).classList.add('active');
     } catch (err) {
+      const msg = err && err.message ? err.message : 'Xəta baş verdi';
       msgBox.className = 'form-msg err';
-      msgBox.textContent = err.message || 'Xəta baş verdi';
-      // also log for debugging
+      msgBox.textContent = msg;
+      showToast('error', msg);
       console.error('Request form submit error:', err);
+    } finally {
+      setButtonLoading(submitBtn, false);
     }
   });
 

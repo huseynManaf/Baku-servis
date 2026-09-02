@@ -89,6 +89,23 @@
   </div>
 </section>
 
+<!-- Account / User dashboard -->
+<section class="section" id="account-section" style="display:none;">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Hesab</span>
+      <h2>Sizin müraciətlər</h2>
+      <p>Burada hesabınıza bağlı müraciətlər görüntülənəcək.</p>
+    </div>
+    <div id="account-requests">
+      <!-- filled by JS -->
+    </div>
+    <div style="margin-top:18px">
+      <button class="btn btn-outline" id="account-logout">Çıxış</button>
+    </div>
+  </div>
+</section>
+
 <section class="section section-alt" id="prosess">
   <div class="container">
     <div class="section-head">
@@ -246,5 +263,7 @@
     </form>
   </div>
 </div>
+<!-- Toast container -->
+<div id="toast-container" aria-live="polite" aria-atomic="true"></div>
 </body>
 </html>
