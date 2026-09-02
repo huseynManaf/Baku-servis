@@ -328,6 +328,8 @@ document.addEventListener('DOMContentLoaded', function () {
       setButtonLoading(submitBtn, false);
     }
   });
+  }
+  }
 
   // ---------- İzləmə + Chat ----------
   let currentTrack = null; // { id, code, phone }
@@ -350,6 +352,7 @@ document.addEventListener('DOMContentLoaded', function () {
     renderTrackResult(data);
     startChatPolling();
   });
+  }
 
   function statusLabel(s) {
     const map = {
