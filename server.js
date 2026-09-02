@@ -114,18 +114,53 @@ app.get('/api/services', async (req, res) => {
 // ====================================================
 app.post('/api/requests', async (req, res) => {
     try {
-        const { 
-            customer_name, phone, service_id, device_info, 
-            problem_description, address_text, latitude, longitude, visit_type 
-        } = req.body;
+    const {
+      customer_name: rawCustomerName,
+      phone: rawPhone,
+      service_id,
+      device_info: rawDeviceInfo,
+      problem_description: rawProblemDescription,
+      address_text: rawAddressText,
+      latitude: rawLatitude,
+      longitude: rawLongitude,
+      visit_type: rawVisitType
+    } = req.body || {};
 
-        if (!customer_name || !phone || !problem_description) {
-            return res.status(400).json({ error: 'Ad, telefon və problem izahı məcburidir' });
-        }
+    const customer_name = (rawCustomerName || '').toString().trim().slice(0,200);
+    let phone = (rawPhone || '').toString().trim();
+    // Normalize phone: keep digits and leading +
+    phone = (phone.startsWith('+') ? '+' : '') + phone.replace(/[^0-9]/g, '');
+    const problem_description = (rawProblemDescription || '').toString().trim().slice(0,2000);
+    const address_text = rawAddressText ? rawAddressText.toString().trim().slice(0,500) : null;
+    const device_info = rawDeviceInfo ? rawDeviceInfo.toString().trim().slice(0,500) : null;
 
-        if (visit_type === 'evde' && !address_text) {
-            return res.status(400).json({ error: 'Evdə xidmət üçün ünvan gərəkdir' });
-        }
+    if (!customer_name || !phone || !problem_description) {
+      return res.status(400).json({ error: 'Ad, telefon və problem izahı məcburidir' });
+    }
+
+    // Coerce numeric fields
+    let svcId = null;
+    if (service_id !== undefined && service_id !== null && service_id !== '') {
+      svcId = Number(service_id);
+      if (Number.isNaN(svcId)) return res.status(400).json({ error: 'Xidmət identifikatoru düzgün deyil' });
+    }
+
+    let latitude = null, longitude = null;
+    if (rawLatitude !== undefined && rawLatitude !== null && rawLatitude !== '') {
+      latitude = parseFloat(rawLatitude);
+      if (Number.isNaN(latitude)) return res.status(400).json({ error: 'Latitude düzgün deyil' });
+    }
+    if (rawLongitude !== undefined && rawLongitude !== null && rawLongitude !== '') {
+      longitude = parseFloat(rawLongitude);
+      if (Number.isNaN(longitude)) return res.status(400).json({ error: 'Longitude düzgün deyil' });
+    }
+
+    const allowedVisit = ['servis', 'evde'];
+    const visit_type = allowedVisit.includes((rawVisitType || '').toString()) ? rawVisitType : 'servis';
+
+    if (visit_type === 'evde' && !address_text) {
+      return res.status(400).json({ error: 'Evdə xidmət üçün ünvan gərəkdir' });
+    }
 
         // Unikal izləmə kodu yaratmaq
         let code;
@@ -144,16 +179,16 @@ app.post('/api/requests', async (req, res) => {
         `;
 
         const values = [
-            code, 
-            customer_name, 
-            phone, 
-            service_id || null, 
-            device_info || null, 
-            problem_description, 
-            address_text || null, 
-            latitude || null, 
-            longitude || null, 
-            visit_type || 'maqaza'
+          code,
+          customer_name,
+          phone,
+          svcId,
+          device_info || null,
+          problem_description,
+          address_text || null,
+          latitude,
+          longitude,
+          visit_type
         ];
 
         const result = await db.query(queryText, values);
