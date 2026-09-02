@@ -7,8 +7,8 @@ document.addEventListener('DOMContentLoaded', function () {
   // ---------- Xidmətləri yüklə ----------
   let servicesCache = [];
   async function loadServices() {
-    const res = await fetch('/api/services');
-    servicesCache = await res.json();
+    const { ok, status, body } = await doFetch('/api/services');
+    servicesCache = body || [];
 
     const grid = el('#services-grid');
     grid.innerHTML = servicesCache.map(s => `
@@ -38,10 +38,24 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Poll services version and refresh when it changes
   let lastServicesVersion = null;
+  // Robust fetch helper that logs and returns parsed JSON body
+  async function doFetch(url, opts = {}) {
+    console.log('[doFetch] ->', url, opts && opts.method ? opts.method : 'GET');
+    try {
+      const r = await fetch(url, opts);
+      let body = {};
+      try { body = await r.json(); } catch (e) { body = {}; }
+      console.log('[doFetch] <-', url, r.status, body);
+      return { ok: r.ok, status: r.status, res: r, body };
+    } catch (err) {
+      console.error('[doFetch] error', url, err);
+      showToast('error', 'Şəbəkə xətası — bağlantınızı yoxlayın');
+      throw err;
+    }
+  }
   async function pollServicesVersion() {
     try {
-      const r = await fetch('/api/services/version');
-      const j = await r.json();
+      const { ok, status, body: j } = await doFetch('/api/services/version');
       if (lastServicesVersion === null) lastServicesVersion = j.version;
       if (j.version && j.version !== lastServicesVersion) {
         lastServicesVersion = j.version;
@@ -119,8 +133,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   async function checkAuth() {
     try {
-      const r = await fetch('/api/me', { credentials: 'same-origin' });
-      const j = await r.json();
+      const { ok, status, body: j } = await doFetch('/api/me', { credentials: 'same-origin' });
       const loginBtn = el('#login-btn');
       const registerBtn = el('#register-btn');
       const accountBtn = el('#account-btn');
@@ -161,12 +174,11 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!container) return;
     container.innerHTML = '<div class="hint">Yüklənir...</div>';
     try {
-      const res = await fetch('/api/user/requests', { credentials: 'same-origin' });
-      if (!res.ok) {
+      const { ok, status, body: rows } = await doFetch('/api/user/requests', { credentials: 'same-origin' });
+      if (!ok) {
         container.innerHTML = '<div class="hint">Müraciətlər yüklənə bilmədi</div>';
         return;
       }
-      const rows = await res.json();
       if (!rows || !rows.length) {
         container.innerHTML = '<div class="hint">Heç bir müraciət tapılmadı</div>';
         return;
@@ -215,10 +227,9 @@ document.addEventListener('DOMContentLoaded', function () {
       try {
         setButtonLoading(submitBtn, true, authForm.querySelector('button[type=submit]').textContent);
         const url = authMode === 'register' ? '/api/register' : '/api/login';
-        const r = await fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok) {
-          const msg = j.error || j.details || (j.message || 'Xəta');
+        const { ok, status, body: j } = await doFetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        if (!ok) {
+          const msg = j.error || j.details || (j.message || `Server error ${status}`);
           showToast('error', msg);
           authMsg.style.display = 'block'; authMsg.className = 'form-msg err'; authMsg.textContent = msg;
           setButtonLoading(submitBtn, false);
@@ -291,15 +302,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const submitBtn = form.querySelector('button[type=submit]');
     try {
       setButtonLoading(submitBtn, true, submitBtn.textContent);
-      const res = await fetch('/api/requests', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const detail = data.error || data.details || 'Xəta baş verdi';
+      const { ok, status, body: data } = await doFetch('/api/requests', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!ok) {
+        const detail = data.error || data.details || `Server error ${status}`;
         showToast('error', detail);
         msgBox.className = 'form-msg err';
         msgBox.textContent = detail;
@@ -308,6 +313,7 @@ document.addEventListener('DOMContentLoaded', function () {
       msgBox.className = 'form-msg ok';
       msgBox.textContent = `Müraciətiniz qeydə alındı! İzləmə kodunuz: ${data.tracking_code}`;
       showToast('success', 'Müraciətiniz qeydə alındı');
+      try { alert('Müraciət qeydə alındı. İzləmə kodu: ' + (data.tracking_code || data.id)); } catch (e) { console.log('Alert failed', e); }
       form.reset();
       addressField.style.display = 'none';
       els('.radio-opt', visitGroup).forEach(o => o.classList.remove('active'));
@@ -334,10 +340,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const fd = new FormData(e.target);
     const code = fd.get('code').trim();
     const phone = fd.get('phone').trim();
-    const res = await fetch(`/api/requests/track?code=${encodeURIComponent(code)}&phone=${encodeURIComponent(phone)}`);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const msg = (data && (data.error || data.details)) || 'Tapılmadı';
+    const { ok, status, body: data } = await doFetch(`/api/requests/track?code=${encodeURIComponent(code)}&phone=${encodeURIComponent(phone)}`);
+    if (!ok) {
+      const msg = (data && (data.error || data.details)) || `Tapılmadı (${status})`;
       showToast('error', msg);
       return;
     }
@@ -370,16 +375,12 @@ document.addEventListener('DOMContentLoaded', function () {
       payBtn.style.display = 'inline-flex';
       payBtn.onclick = async () => {
         payBtn.disabled = true; payBtn.textContent = 'Ödəniş edilir...';
-        const r = await fetch(`/api/requests/${data.id}/pay`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code: currentTrack.code, phone: currentTrack.phone, method: 'card' })
-        });
-        const rd = await r.json();
-        if (r.ok) {
+        const { ok, status, body: rd } = await doFetch(`/api/requests/${data.id}/pay`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: currentTrack.code, phone: currentTrack.phone, method: 'card' }) });
+        if (ok) {
           payBtn.textContent = 'Ödənildi ✓';
           data.is_paid = 1;
         } else {
-          alert((rd && (rd.error || rd.details)) || 'Ödəniş xətası');
+          showToast('error', (rd && (rd.error || rd.details)) || `Ödəniş xətası (${status})`);
           payBtn.disabled = false; payBtn.textContent = 'Kartla ödə (demo)';
         }
       };
@@ -391,9 +392,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
   async function loadMessages() {
     if (!currentTrack) return;
-    const res = await fetch(`/api/requests/${currentTrack.id}/messages?code=${encodeURIComponent(currentTrack.code)}&phone=${encodeURIComponent(currentTrack.phone)}`);
-    if (!res.ok) return;
-    const msgs = await res.json();
+    const { ok, status, body: msgs } = await doFetch(`/api/requests/${currentTrack.id}/messages?code=${encodeURIComponent(currentTrack.code)}&phone=${encodeURIComponent(currentTrack.phone)}`);
+    if (!ok) return;
     const log = el('#chat-log');
     log.innerHTML = msgs.map(m => `
       <div class="msg ${m.sender}">
@@ -419,13 +419,9 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!body || !currentTrack) return;
     input.value = '';
     try {
-      const r = await fetch(`/api/requests/${currentTrack.id}/messages`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: currentTrack.code, phone: currentTrack.phone, body })
-      });
-      if (!r.ok) {
-        const jd = await r.json().catch(() => ({}));
-        showToast('error', jd.error || jd.details || 'Mesaj göndərilə bilmədi');
+      const { ok, status, body: jd } = await doFetch(`/api/requests/${currentTrack.id}/messages`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: currentTrack.code, phone: currentTrack.phone, body }) });
+      if (!ok) {
+        showToast('error', jd && (jd.error || jd.details) ? (jd.error || jd.details) : `Mesaj göndərilə bilmədi (${status})`);
       } else {
         showToast('success', 'Mesaj göndərildi');
       }
