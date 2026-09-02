@@ -88,20 +88,31 @@
       const loginBtn = el('#login-btn');
       const registerBtn = el('#register-btn');
       const accountBtn = el('#account-btn');
-      if (!loginBtn || !registerBtn || !accountBtn) return; // page doesn't have auth controls
+      // Update UI per-element so pages missing one control still work
       if (j.loggedIn) {
-        loginBtn.style.display = 'none'; registerBtn.style.display = 'none';
-        accountBtn.style.display = 'inline-flex'; accountBtn.textContent = 'Hesabım (' + (j.username || '') + ')';
-        accountBtn.onclick = async () => {
-          // clicking account acts as logout for now
-          if (!confirm('Çıxış etmək istəyirsiniz?')) return;
-          await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
-          checkAuth();
-        };
+        if (loginBtn) loginBtn.style.display = 'none';
+        if (registerBtn) registerBtn.style.display = 'none';
+        if (accountBtn) {
+          accountBtn.style.display = 'inline-flex';
+          accountBtn.textContent = 'Hesabım (' + (j.username || '') + ')';
+          accountBtn.onclick = async (e) => {
+            // clicking account acts as logout for now
+            e && e.preventDefault && e.preventDefault();
+            if (!confirm('Çıxış etmək istəyirsiniz?')) return;
+            await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
+            checkAuth();
+          };
+        }
       } else {
-        loginBtn.style.display = 'inline-flex'; registerBtn.style.display = 'inline-flex'; accountBtn.style.display = 'none';
-        loginBtn.onclick = () => openAuth('login');
-        registerBtn.onclick = () => openAuth('register');
+        if (loginBtn) {
+          loginBtn.style.display = 'inline-flex';
+          loginBtn.onclick = (e) => { e && e.preventDefault && e.preventDefault(); openAuth('login'); };
+        }
+        if (registerBtn) {
+          registerBtn.style.display = 'inline-flex';
+          registerBtn.onclick = (e) => { e && e.preventDefault && e.preventDefault(); openAuth('register'); };
+        }
+        if (accountBtn) accountBtn.style.display = 'none';
       }
     } catch (e) { console.error('checkAuth error', e); }
   }
