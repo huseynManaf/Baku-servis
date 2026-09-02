@@ -256,15 +256,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
   if (visitGroup) {
     visitGroup.addEventListener('click', (e) => {
-    const opt = e.target.closest('.radio-opt');
-    if (!opt) return;
-    els('.radio-opt', visitGroup).forEach(o => o.classList.remove('active'));
-    opt.classList.add('active');
-    opt.querySelector('input').checked = true;
-    const isHome = opt.dataset.val === 'evde';
-    addressField.style.display = isHome ? 'block' : 'none';
-    if (isHome) initMap();
-  });
+      const opt = e.target.closest('.radio-opt');
+      if (!opt) return;
+      els('.radio-opt', visitGroup).forEach(o => o.classList.remove('active'));
+      opt.classList.add('active');
+      opt.querySelector('input').checked = true;
+      const isHome = opt.dataset.val === 'evde';
+      addressField.style.display = isHome ? 'block' : 'none';
+      if (isHome) initMap();
+    });
+  }
 
   function initMap() {
     if (map) { setTimeout(() => map.invalidateSize(), 150); return; }
@@ -286,49 +287,47 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     setTimeout(() => map.invalidateSize(), 150);
   }
-  }
 
   // ---------- Müraciət forması submit ----------
   const requestFormEl = el('#request-form');
   if (requestFormEl) {
     requestFormEl.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const form = e.target;
-    const fd = new FormData(form);
-    const payload = Object.fromEntries(fd.entries());
-    const msgBox = el('#form-msg');
-    msgBox.className = 'form-msg';
-    msgBox.textContent = '';
-    const submitBtn = form.querySelector('button[type=submit]');
-    try {
-      setButtonLoading(submitBtn, true, submitBtn.textContent);
-      const { ok, status, body: data } = await doFetch('/api/requests', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      if (!ok) {
-        const detail = data.error || data.details || `Server error ${status}`;
-        showToast('error', detail);
+      e.preventDefault();
+      const form = e.target;
+      const fd = new FormData(form);
+      const payload = Object.fromEntries(fd.entries());
+      const msgBox = el('#form-msg');
+      msgBox.className = 'form-msg';
+      msgBox.textContent = '';
+      const submitBtn = form.querySelector('button[type=submit]');
+      try {
+        setButtonLoading(submitBtn, true, submitBtn.textContent);
+        const { ok, status, body: data } = await doFetch('/api/requests', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        if (!ok) {
+          const detail = data.error || data.details || `Server error ${status}`;
+          showToast('error', detail);
+          msgBox.className = 'form-msg err';
+          msgBox.textContent = detail;
+          return;
+        }
+        msgBox.className = 'form-msg ok';
+        msgBox.textContent = `Müraciətiniz qeydə alındı! İzləmə kodunuz: ${data.tracking_code}`;
+        showToast('success', 'Müraciətiniz qeydə alındı');
+        try { alert('Müraciət qeydə alındı. İzləmə kodu: ' + (data.tracking_code || data.id)); } catch (e) { console.log('Alert failed', e); }
+        form.reset();
+        addressField.style.display = 'none';
+        els('.radio-opt', visitGroup).forEach(o => o.classList.remove('active'));
+        el('.radio-opt[data-val="servis"]', visitGroup).classList.add('active');
+      } catch (err) {
+        const msg = err && err.message ? err.message : 'Xəta baş verdi';
         msgBox.className = 'form-msg err';
-        msgBox.textContent = detail;
-        return;
+        msgBox.textContent = msg;
+        showToast('error', msg);
+        console.error('Request form submit error:', err);
+      } finally {
+        setButtonLoading(submitBtn, false);
       }
-      msgBox.className = 'form-msg ok';
-      msgBox.textContent = `Müraciətiniz qeydə alındı! İzləmə kodunuz: ${data.tracking_code}`;
-      showToast('success', 'Müraciətiniz qeydə alındı');
-      try { alert('Müraciət qeydə alındı. İzləmə kodu: ' + (data.tracking_code || data.id)); } catch (e) { console.log('Alert failed', e); }
-      form.reset();
-      addressField.style.display = 'none';
-      els('.radio-opt', visitGroup).forEach(o => o.classList.remove('active'));
-      el('.radio-opt[data-val="servis"]', visitGroup).classList.add('active');
-    } catch (err) {
-      const msg = err && err.message ? err.message : 'Xəta baş verdi';
-      msgBox.className = 'form-msg err';
-      msgBox.textContent = msg;
-      showToast('error', msg);
-      console.error('Request form submit error:', err);
-    } finally {
-      setButtonLoading(submitBtn, false);
-    }
-  });
-  }
+    });
   }
 
   // ---------- İzləmə + Chat ----------
@@ -338,20 +337,20 @@ document.addEventListener('DOMContentLoaded', function () {
   const trackFormEl = el('#track-form');
   if (trackFormEl) {
     trackFormEl.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const code = fd.get('code').trim();
-    const phone = fd.get('phone').trim();
-    const { ok, status, body: data } = await doFetch(`/api/requests/track?code=${encodeURIComponent(code)}&phone=${encodeURIComponent(phone)}`);
-    if (!ok) {
-      const msg = (data && (data.error || data.details)) || `Tapılmadı (${status})`;
-      showToast('error', msg);
-      return;
-    }
-    currentTrack = { id: data.id, code, phone };
-    renderTrackResult(data);
-    startChatPolling();
-  });
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const code = fd.get('code').trim();
+      const phone = fd.get('phone').trim();
+      const { ok, status, body: data } = await doFetch(`/api/requests/track?code=${encodeURIComponent(code)}&phone=${encodeURIComponent(phone)}`);
+      if (!ok) {
+        const msg = (data && (data.error || data.details)) || `Tapılmadı (${status})`;
+        showToast('error', msg);
+        return;
+      }
+      currentTrack = { id: data.id, code, phone };
+      renderTrackResult(data);
+      startChatPolling();
+    });
   }
 
   function statusLabel(s) {
