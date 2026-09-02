@@ -5,6 +5,7 @@
   "bundledWebRuntime": false,
   "server": {
     "url": "https://hugu-servis-1.onrender.com",
+    "hostname": "hugu-servis-1.onrender.com",
     "cleartext": false
   }
 }
