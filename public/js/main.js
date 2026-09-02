@@ -77,8 +77,9 @@
     authModal.classList.add('open');
   }
   function closeAuth() { authModal.classList.remove('open'); }
-  document.getElementById('auth-modal-close').addEventListener('click', closeAuth);
-  authModal.addEventListener('click', (e) => { if (e.target === authModal) closeAuth(); });
+  const authModalCloseBtn = document.getElementById('auth-modal-close');
+  if (authModalCloseBtn) authModalCloseBtn.addEventListener('click', closeAuth);
+  if (authModal) authModal.addEventListener('click', (e) => { if (e.target === authModal) closeAuth(); });
 
   async function checkAuth() {
     try {
@@ -87,6 +88,7 @@
       const loginBtn = el('#login-btn');
       const registerBtn = el('#register-btn');
       const accountBtn = el('#account-btn');
+      if (!loginBtn || !registerBtn || !accountBtn) return; // page doesn't have auth controls
       if (j.loggedIn) {
         loginBtn.style.display = 'none'; registerBtn.style.display = 'none';
         accountBtn.style.display = 'inline-flex'; accountBtn.textContent = 'Hesabım (' + (j.username || '') + ')';
@@ -104,7 +106,8 @@
     } catch (e) { console.error('checkAuth error', e); }
   }
 
-  authForm.addEventListener('submit', async (ev) => {
+  if (authForm) {
+    authForm.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     authMsg.style.display = 'none'; authMsg.textContent = '';
     const payload = { username: authUsername.value.trim(), password: authPassword.value };
@@ -124,12 +127,15 @@
     }
   });
 
+  }
+
   // ---------- Xidmət forması: servis / evde toggle ----------
   const visitGroup = el('#visit-type-group');
   const addressField = el('#address-field');
   let map, marker;
 
-  visitGroup.addEventListener('click', (e) => {
+  if (visitGroup) {
+    visitGroup.addEventListener('click', (e) => {
     const opt = e.target.closest('.radio-opt');
     if (!opt) return;
     els('.radio-opt', visitGroup).forEach(o => o.classList.remove('active'));
@@ -162,7 +168,9 @@
   }
 
   // ---------- Müraciət forması submit ----------
-  el('#request-form').addEventListener('submit', async (e) => {
+  const requestFormEl = el('#request-form');
+  if (requestFormEl) {
+    requestFormEl.addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = e.target;
     const fd = new FormData(form);
@@ -202,7 +210,9 @@
   let currentTrack = null; // { id, code, phone }
   let chatPollTimer = null;
 
-  el('#track-form').addEventListener('submit', async (e) => {
+  const trackFormEl = el('#track-form');
+  if (trackFormEl) {
+    trackFormEl.addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
     const code = fd.get('code').trim();
