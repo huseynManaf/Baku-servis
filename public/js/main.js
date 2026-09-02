@@ -166,6 +166,7 @@
     });
     setTimeout(() => map.invalidateSize(), 150);
   }
+  }
 
   // ---------- Müraciət forması submit ----------
   const requestFormEl = el('#request-form');
