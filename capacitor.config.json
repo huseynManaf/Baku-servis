@@ -1,0 +1,10 @@
+{
+  "appId": "com.huguservis.app",
+  "appName": "Hugu Servis",
+  "webDir": "public",
+  "bundledWebRuntime": false,
+  "server": {
+    "url": "https://hugu-servis-1.onrender.com",
+    "cleartext": false
+  }
+}
