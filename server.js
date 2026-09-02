@@ -57,8 +57,9 @@ app.get('/api/services', async (req, res) => {
         const { rows } = await db.query('SELECT * FROM services WHERE is_active = true ORDER BY category, name');
         res.json(rows);
     } catch (error) {
-        console.error('Xidmətlər alma xətası:', error);
-        res.status(500).json({ error: 'Server xətası baş verdi' });
+      console.error('Xidmətlər alma xətası:');
+      console.error(error && error.stack ? error.stack : error);
+      res.status(500).json({ error: 'Server xətası baş verdi', details: error && error.message ? error.message : String(error) });
     }
 });
 
@@ -113,8 +114,9 @@ app.post('/api/requests', async (req, res) => {
 
         res.json({ success: true, id: result.rows[0].id, tracking_code: code });
     } catch (error) {
-        console.error('Müraciət yaratma xətası:', error);
-        res.status(500).json({ error: 'Server xətası baş verdi' });
+        console.error('Müraciət yaratma xətası:');
+        console.error(error && error.stack ? error.stack : error);
+        res.status(500).json({ error: 'Server xətası baş verdi', details: error && error.message ? error.message : String(error) });
     }
 });
 
@@ -130,8 +132,9 @@ app.get('/api/requests/track', async (req, res) => {
     if (!row) return res.status(404).json({ error: 'Muraciet tapilmadi' });
     res.json(publicRequest(row));
   } catch (err) {
-    console.error('Tracking error:', err);
-    res.status(500).json({ error: 'Server xətası' });
+    console.error('Tracking error:');
+    console.error(err && err.stack ? err.stack : err);
+    res.status(500).json({ error: 'Server xətası', details: err && err.message ? err.message : String(err) });
   }
 });
 
@@ -151,8 +154,9 @@ app.get('/api/requests/:id/messages', async (req, res) => {
     const msgsRes = await db.query('SELECT * FROM messages WHERE request_id = $1 ORDER BY id ASC', [req.params.id]);
     res.json(msgsRes.rows);
   } catch (err) {
-    console.error('Get messages error:', err);
-    res.status(500).json({ error: 'Server xətası' });
+    console.error('Get messages error:');
+    console.error(err && err.stack ? err.stack : err);
+    res.status(500).json({ error: 'Server xətası', details: err && err.message ? err.message : String(err) });
   }
 });
 
@@ -170,8 +174,9 @@ app.post('/api/requests/:id/messages', async (req, res) => {
     await db.query('INSERT INTO messages (request_id, sender, body) VALUES ($1, $2, $3)', [req.params.id, 'customer', body.trim()]);
     res.json({ ok: true });
   } catch (err) {
-    console.error('Post customer message error:', err);
-    res.status(500).json({ error: 'Server xətası' });
+    console.error('Post customer message error:');
+    console.error(err && err.stack ? err.stack : err);
+    res.status(500).json({ error: 'Server xətası', details: err && err.message ? err.message : String(err) });
   }
 });
 
@@ -195,8 +200,9 @@ app.post('/api/requests/:id/pay', async (req, res) => {
 
     res.json({ ok: true, payment_id: paymentId, amount, status: 'odenildi', demo: true });
   } catch (err) {
-    console.error('Payment error:', err);
-    res.status(500).json({ error: 'Server xətası' });
+    console.error('Payment error:');
+    console.error(err && err.stack ? err.stack : err);
+    res.status(500).json({ error: 'Server xətası', details: err && err.message ? err.message : String(err) });
   }
 });
 
@@ -215,8 +221,9 @@ app.post('/api/admin/login', async (req, res) => {
     req.session.adminUser = admin.username;
     res.json({ ok: true, username: admin.username });
   } catch (err) {
-    console.error('Admin login error:', err);
-    res.status(500).json({ error: 'Server xətası' });
+    console.error('Admin login error:');
+    console.error(err && err.stack ? err.stack : err);
+    res.status(500).json({ error: 'Server xətası', details: err && err.message ? err.message : String(err) });
   }
 });
 
@@ -245,8 +252,9 @@ app.get('/api/admin/requests', requireAdmin, async (req, res) => {
     const result = await db.query(q, params);
     res.json(result.rows);
   } catch (err) {
-    console.error('Admin requests list error:', err);
-    res.status(500).json({ error: 'Server xətası' });
+    console.error('Admin requests list error:');
+    console.error(err && err.stack ? err.stack : err);
+    res.status(500).json({ error: 'Server xətası', details: err && err.message ? err.message : String(err) });
   }
 });
 
@@ -259,8 +267,9 @@ app.get('/api/admin/requests/:id', requireAdmin, async (req, res) => {
     const paymentsRes = await db.query('SELECT * FROM payments WHERE request_id = $1 ORDER BY id DESC', [req.params.id]);
     res.json({ request: row, messages: messagesRes.rows, payments: paymentsRes.rows });
   } catch (err) {
-    console.error('Admin get request error:', err);
-    res.status(500).json({ error: 'Server xətası' });
+    console.error('Admin get request error:');
+    console.error(err && err.stack ? err.stack : err);
+    res.status(500).json({ error: 'Server xətası', details: err && err.message ? err.message : String(err) });
   }
 });
 
@@ -279,8 +288,9 @@ app.put('/api/admin/requests/:id', requireAdmin, async (req, res) => {
     await db.query(q, params);
     res.json({ ok: true });
   } catch (err) {
-    console.error('Admin update request error:', err);
-    res.status(500).json({ error: 'Server xətası' });
+    console.error('Admin update request error:');
+    console.error(err && err.stack ? err.stack : err);
+    res.status(500).json({ error: 'Server xətası', details: err && err.message ? err.message : String(err) });
   }
 });
 
@@ -292,8 +302,9 @@ app.post('/api/admin/requests/:id/messages', requireAdmin, async (req, res) => {
     await db.query('INSERT INTO messages (request_id, sender, body) VALUES ($1, $2, $3)', [req.params.id, 'admin', body.trim()]);
     res.json({ ok: true });
   } catch (err) {
-    console.error('Admin post message error:', err);
-    res.status(500).json({ error: 'Server xətası' });
+    console.error('Admin post message error:');
+    console.error(err && err.stack ? err.stack : err);
+    res.status(500).json({ error: 'Server xətası', details: err && err.message ? err.message : String(err) });
   }
 });
 
@@ -305,8 +316,9 @@ app.get('/api/admin/services', requireAdmin, async (req, res) => {
     const result = await db.query('SELECT * FROM services ORDER BY category, name');
     res.json(result.rows);
   } catch (err) {
-    console.error('Admin services list error:', err);
-    res.status(500).json({ error: 'Server xətası' });
+    console.error('Admin services list error:');
+    console.error(err && err.stack ? err.stack : err);
+    res.status(500).json({ error: 'Server xətası', details: err && err.message ? err.message : String(err) });
   }
 });
 
@@ -317,8 +329,9 @@ app.post('/api/admin/services', requireAdmin, async (req, res) => {
     const result = await db.query('INSERT INTO services (name, category, description, price, discount_price) VALUES ($1,$2,$3,$4,$5) RETURNING id', [name, category || 'umumi', description || '', price, discount_price || null]);
     res.json({ ok: true, id: result.rows[0].id });
   } catch (err) {
-    console.error('Admin create service error:', err);
-    res.status(500).json({ error: 'Server xətası' });
+    console.error('Admin create service error:');
+    console.error(err && err.stack ? err.stack : err);
+    res.status(500).json({ error: 'Server xətası', details: err && err.message ? err.message : String(err) });
   }
 });
 
@@ -339,8 +352,9 @@ app.put('/api/admin/services/:id', requireAdmin, async (req, res) => {
     await db.query(q, params);
     res.json({ ok: true });
   } catch (err) {
-    console.error('Admin update service error:', err);
-    res.status(500).json({ error: 'Server xətası' });
+    console.error('Admin update service error:');
+    console.error(err && err.stack ? err.stack : err);
+    res.status(500).json({ error: 'Server xətası', details: err && err.message ? err.message : String(err) });
   }
 });
 
@@ -349,8 +363,9 @@ app.delete('/api/admin/services/:id', requireAdmin, async (req, res) => {
     await db.query('DELETE FROM services WHERE id = $1', [req.params.id]);
     res.json({ ok: true });
   } catch (err) {
-    console.error('Admin delete service error:', err);
-    res.status(500).json({ error: 'Server xətası' });
+    console.error('Admin delete service error:');
+    console.error(err && err.stack ? err.stack : err);
+    res.status(500).json({ error: 'Server xətası', details: err && err.message ? err.message : String(err) });
   }
 });
 
@@ -371,15 +386,17 @@ app.get('/api/admin/stats', requireAdmin, async (req, res) => {
     const gelir = parseFloat(gelirRes.rows[0].s);
     res.json({ total, yeni, icrada, hazir, gelir });
   } catch (err) {
-    console.error('Admin stats error:', err);
-    res.status(500).json({ error: 'Server xətası' });
+    console.error('Admin stats error:');
+    console.error(err && err.stack ? err.stack : err);
+    res.status(500).json({ error: 'Server xətası', details: err && err.message ? err.message : String(err) });
   }
 });
 
 // ---------- Xeta idaresi (bazani ayaqda saxlamaq ucun) ----------
 app.use((err, req, res, next) => {
-  console.error('[XETA]', err);
-  res.status(500).json({ error: 'Server xetasi bash verdi. Bir az sonra yeniden cehd edin.' });
+  console.error('[XETA]');
+  console.error(err && err.stack ? err.stack : err);
+  res.status(500).json({ error: 'Server xetasi bash verdi. Bir az sonra yeniden cehd edin.', details: err && err.message ? err.message : String(err) });
 });
 
 process.on('unhandledRejection', (e) => console.error('[unhandledRejection]', e));

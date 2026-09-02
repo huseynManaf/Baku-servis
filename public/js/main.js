@@ -93,7 +93,10 @@
         body: JSON.stringify(payload)
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Xəta baş verdi');
+      if (!res.ok) {
+        const detail = data.error || data.details || 'Xəta baş verdi';
+        throw new Error(detail);
+      }
 
       msgBox.className = 'form-msg ok';
       msgBox.textContent = `Müraciətiniz qeydə alındı! İzləmə kodunuz: ${data.tracking_code} — bu kodu telefon nömrənizlə birlikdə saxlayın, "Sifarişimi izlə" bölməsindən statusu görə bilərsiniz.`;
@@ -103,7 +106,9 @@
       el('.radio-opt[data-val="servis"]', visitGroup).classList.add('active');
     } catch (err) {
       msgBox.className = 'form-msg err';
-      msgBox.textContent = err.message;
+      msgBox.textContent = err.message || 'Xəta baş verdi';
+      // also log for debugging
+      console.error('Request form submit error:', err);
     }
   });
 
@@ -120,7 +125,7 @@
     const res = await fetch(`/api/requests/track?code=${encodeURIComponent(code)}&phone=${encodeURIComponent(phone)}`);
     const data = await res.json();
     if (!res.ok) {
-      alert(data.error || 'Tapılmadı');
+      alert((data && (data.error || data.details)) || 'Tapılmadı');
       return;
     }
     currentTrack = { id: data.id, code, phone };
@@ -161,7 +166,7 @@
           payBtn.textContent = 'Ödənildi ✓';
           data.is_paid = 1;
         } else {
-          alert(rd.error);
+          alert((rd && (rd.error || rd.details)) || 'Ödəniş xətası');
           payBtn.disabled = false; payBtn.textContent = 'Kartla ödə (demo)';
         }
       };
