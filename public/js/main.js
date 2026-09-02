@@ -333,11 +333,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const fd = new FormData(e.target);
     const code = fd.get('code').trim();
     const phone = fd.get('phone').trim();
-
     const res = await fetch(`/api/requests/track?code=${encodeURIComponent(code)}&phone=${encodeURIComponent(phone)}`);
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      alert((data && (data.error || data.details)) || 'Tapılmadı');
+      const msg = (data && (data.error || data.details)) || 'Tapılmadı';
+      showToast('error', msg);
       return;
     }
     currentTrack = { id: data.id, code, phone };
@@ -417,10 +417,20 @@ document.addEventListener('DOMContentLoaded', function () {
     const body = input.value.trim();
     if (!body || !currentTrack) return;
     input.value = '';
-    await fetch(`/api/requests/${currentTrack.id}/messages`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: currentTrack.code, phone: currentTrack.phone, body })
-    });
+    try {
+      const r = await fetch(`/api/requests/${currentTrack.id}/messages`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: currentTrack.code, phone: currentTrack.phone, body })
+      });
+      if (!r.ok) {
+        const jd = await r.json().catch(() => ({}));
+        showToast('error', jd.error || jd.details || 'Mesaj göndərilə bilmədi');
+      } else {
+        showToast('success', 'Mesaj göndərildi');
+      }
+    } catch (e) {
+      showToast('error', 'Mesaj göndərilə bilmədi');
+    }
     loadMessages();
   }
 
