@@ -82,7 +82,7 @@
 
   async function checkAuth() {
     try {
-      const r = await fetch('/api/me');
+      const r = await fetch('/api/me', { credentials: 'same-origin' });
       const j = await r.json();
       const loginBtn = el('#login-btn');
       const registerBtn = el('#register-btn');
@@ -93,7 +93,7 @@
         accountBtn.onclick = async () => {
           // clicking account acts as logout for now
           if (!confirm('Çıxış etmək istəyirsiniz?')) return;
-          await fetch('/api/logout', { method: 'POST' });
+          await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
           checkAuth();
         };
       } else {
@@ -111,7 +111,7 @@
     if (authMode === 'register') payload.phone = authPhone.value.trim();
     try {
       const url = authMode === 'register' ? '/api/register' : '/api/login';
-      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const r = await fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const j = await r.json();
       if (!r.ok) {
         authMsg.style.display = 'block'; authMsg.className = 'form-msg err'; authMsg.textContent = j.error || j.details || 'Xəta';
@@ -174,6 +174,7 @@
     try {
       const res = await fetch('/api/requests', {
         method: 'POST',
+        credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
