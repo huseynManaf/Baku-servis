@@ -54,6 +54,76 @@
     return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
+  // ---------- Auth UI (login / register) ----------
+  const authModal = el('#auth-modal');
+  const authForm = document.getElementById('auth-form');
+  const authTitle = document.getElementById('auth-modal-title');
+  const authUsername = document.getElementById('auth-username');
+  const authPassword = document.getElementById('auth-password');
+  const authPhoneField = document.getElementById('auth-phone-field');
+  const authPhone = document.getElementById('auth-phone');
+  const authMsg = document.getElementById('auth-msg');
+  let authMode = 'login'; // or 'register'
+
+  function openAuth(mode) {
+    authMode = mode;
+    authTitle.textContent = mode === 'register' ? 'Qeydiyyat' : 'Daxil ol';
+    authPhoneField.style.display = mode === 'register' ? 'block' : 'none';
+    authForm.querySelector('button[type=submit]').textContent = mode === 'register' ? 'Qeydiyyat' : 'Daxil ol';
+    authMsg.style.display = 'none'; authMsg.textContent = '';
+    authUsername.value = '';
+    authPassword.value = '';
+    authPhone.value = '';
+    authModal.classList.add('open');
+  }
+  function closeAuth() { authModal.classList.remove('open'); }
+  document.getElementById('auth-modal-close').addEventListener('click', closeAuth);
+  authModal.addEventListener('click', (e) => { if (e.target === authModal) closeAuth(); });
+
+  async function checkAuth() {
+    try {
+      const r = await fetch('/api/me');
+      const j = await r.json();
+      const loginBtn = el('#login-btn');
+      const registerBtn = el('#register-btn');
+      const accountBtn = el('#account-btn');
+      if (j.loggedIn) {
+        loginBtn.style.display = 'none'; registerBtn.style.display = 'none';
+        accountBtn.style.display = 'inline-flex'; accountBtn.textContent = 'Hesabım (' + (j.username || '') + ')';
+        accountBtn.onclick = async () => {
+          // clicking account acts as logout for now
+          if (!confirm('Çıxış etmək istəyirsiniz?')) return;
+          await fetch('/api/logout', { method: 'POST' });
+          checkAuth();
+        };
+      } else {
+        loginBtn.style.display = 'inline-flex'; registerBtn.style.display = 'inline-flex'; accountBtn.style.display = 'none';
+        loginBtn.onclick = () => openAuth('login');
+        registerBtn.onclick = () => openAuth('register');
+      }
+    } catch (e) { console.error('checkAuth error', e); }
+  }
+
+  authForm.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    authMsg.style.display = 'none'; authMsg.textContent = '';
+    const payload = { username: authUsername.value.trim(), password: authPassword.value };
+    if (authMode === 'register') payload.phone = authPhone.value.trim();
+    try {
+      const url = authMode === 'register' ? '/api/register' : '/api/login';
+      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const j = await r.json();
+      if (!r.ok) {
+        authMsg.style.display = 'block'; authMsg.className = 'form-msg err'; authMsg.textContent = j.error || j.details || 'Xəta';
+        return;
+      }
+      closeAuth();
+      checkAuth();
+    } catch (err) {
+      authMsg.style.display = 'block'; authMsg.className = 'form-msg err'; authMsg.textContent = err.message || 'Xəta';
+    }
+  });
+
   // ---------- Xidmət forması: servis / evde toggle ----------
   const visitGroup = el('#visit-type-group');
   const addressField = el('#address-field');
@@ -227,5 +297,6 @@
     loadMessages();
   }
 
+  checkAuth();
   loadServices();
 })();
