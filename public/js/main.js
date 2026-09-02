@@ -1,5 +1,6 @@
 // public/js/main.js
-(function () {
+// Initialize after DOM is ready so elements placed after the script are available
+document.addEventListener('DOMContentLoaded', function () {
   const el = (sel, root = document) => root.querySelector(sel);
   const els = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
@@ -322,4 +323,4 @@
 
   checkAuth();
   loadServices();
-})();
+});
