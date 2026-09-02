@@ -10,6 +10,17 @@ const db = require('./db');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// In-memory services version to notify clients when services change
+let servicesVersion = 1;
+
+function bumpServicesVersion() { servicesVersion = (servicesVersion || 1) + 1; }
+
+// Simple login middleware for regular users
+function requireUser(req, res, next) {
+  if (req.session && req.session.userId) return next();
+  return res.status(401).json({ error: 'Giriş tələb olunur' });
+}
+
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -136,6 +147,38 @@ async function ensureMessagesAndPayments() {
   }
 }
 
+async function ensureUsersTable() {
+  try {
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS users (
+          id SERIAL PRIMARY KEY,
+          username TEXT UNIQUE NOT NULL,
+          password_hash TEXT NOT NULL,
+          phone TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+        )
+      `);
+    } catch (e2) {
+      try {
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            phone TEXT,
+            created_at TEXT DEFAULT (datetime('now'))
+          )
+        `);
+      } catch (e3) {
+        console.error('Failed to create users table with both Postgres and SQLite DDL:', e3);
+      }
+    }
+  } catch (err) {
+    console.error('ensureUsersTable error:', err);
+  }
+}
+
 function publicRequest(row) {
   // mushteriye/adminə qaytarilan zaman heç bir gizli sahə yoxdur, sadece formatlayiriq
   return row;
@@ -247,6 +290,15 @@ app.post('/api/requests', async (req, res) => {
         ];
 
         const result = await db.query(queryText, values);
+
+        // Try to link request with logged-in user if user_id column exists
+        try {
+          if (req.session && req.session.userId) {
+            await db.query('UPDATE requests SET user_id = $1 WHERE id = $2', [req.session.userId, result.rows[0].id]);
+          }
+        } catch (e) {
+          // ignore if column doesn't exist
+        }
 
         res.json({ success: true, id: result.rows[0].id, tracking_code: code });
     } catch (error) {
@@ -483,6 +535,7 @@ app.post('/api/admin/services', requireAdmin, async (req, res) => {
     const { name, category, description, price, discount_price } = req.body;
     if (!name || price === undefined) return res.status(400).json({ error: 'Ad ve qiymet mecburidir' });
     const result = await db.query('INSERT INTO services (name, category, description, price, discount_price) VALUES ($1,$2,$3,$4,$5) RETURNING id', [name, category || 'umumi', description || '', price, discount_price || null]);
+    bumpServicesVersion();
     res.json({ ok: true, id: result.rows[0].id });
   } catch (err) {
     console.error('Admin create service error:');
@@ -506,6 +559,7 @@ app.put('/api/admin/services/:id', requireAdmin, async (req, res) => {
     params.push(req.params.id);
     const q = `UPDATE services SET ${parts.join(', ')} WHERE id = $${params.length}`;
     await db.query(q, params);
+    bumpServicesVersion();
     res.json({ ok: true });
   } catch (err) {
     console.error('Admin update service error:');
@@ -517,6 +571,7 @@ app.put('/api/admin/services/:id', requireAdmin, async (req, res) => {
 app.delete('/api/admin/services/:id', requireAdmin, async (req, res) => {
   try {
     await db.query('DELETE FROM services WHERE id = $1', [req.params.id]);
+    bumpServicesVersion();
     res.json({ ok: true });
   } catch (err) {
     console.error('Admin delete service error:');
@@ -562,6 +617,67 @@ app.get('/api/admin/stats', requireAdmin, async (req, res) => {
   }
 });
 
+// Expose services version so clients can poll and reload service list
+app.get('/api/services/version', (req, res) => {
+  res.json({ version: servicesVersion || 1 });
+});
+
+// Regular user registration/login
+app.post('/api/register', async (req, res) => {
+  try {
+    const { username, password, phone } = req.body || {};
+    if (!username || !password) return res.status(400).json({ error: 'username and password required' });
+    const hash = bcrypt.hashSync(password, 10);
+    const result = await db.query('INSERT INTO users (username, password_hash, phone) VALUES ($1,$2,$3) RETURNING id, username', [username, hash, phone || null]);
+    const user = result.rows[0];
+    req.session.userId = user.id;
+    req.session.username = user.username;
+    res.json({ ok: true, id: user.id, username: user.username });
+  } catch (err) {
+    console.error('Register error:', err);
+    res.status(500).json({ error: 'Server xətası', details: err && err.message ? err.message : String(err) });
+  }
+});
+
+app.post('/api/login', async (req, res) => {
+  try {
+    const { username, password } = req.body || {};
+    if (!username || !password) return res.status(400).json({ error: 'username and password required' });
+    const result = await db.query('SELECT * FROM users WHERE username = $1', [username]);
+    const user = result.rows[0];
+    if (!user || !bcrypt.compareSync(password, user.password_hash || '')) return res.status(401).json({ error: 'invalid credentials' });
+    req.session.userId = user.id; req.session.username = user.username;
+    res.json({ ok: true, id: user.id, username: user.username });
+  } catch (err) {
+    console.error('Login error:', err);
+    res.status(500).json({ error: 'Server xətası', details: err && err.message ? err.message : String(err) });
+  }
+});
+
+app.post('/api/logout', (req, res) => { req.session.destroy(() => res.json({ ok: true })); });
+
+app.get('/api/me', (req, res) => {
+  if (req.session && req.session.userId) return res.json({ loggedIn: true, id: req.session.userId, username: req.session.username });
+  res.json({ loggedIn: false });
+});
+
+// User's requests list
+app.get('/api/user/requests', requireUser, async (req, res) => {
+  try {
+    // attempt to select requests linked to user_id; if schema lacks user_id, return empty
+    try {
+      const r = await db.query('SELECT * FROM requests WHERE user_id = $1 ORDER BY created_at DESC', [req.session.userId]);
+      return res.json(r.rows || []);
+    } catch (e) {
+      console.error('Failed to load user requests (maybe user_id missing):', e && e.message ? e.message : e);
+      return res.json([]);
+    }
+  } catch (err) {
+    console.error('User requests error:', err);
+    res.status(500).json({ error: 'Server xətası', details: err && err.message ? err.message : String(err) });
+  }
+});
+
 // ---------- Xeta idaresi (bazani ayaqda saxlamaq ucun) ----------
 app.use((err, req, res, next) => {
   console.error('[XETA]');
@@ -577,6 +693,14 @@ process.on('uncaughtException', (e) => console.error('[uncaughtException]', e));
   try {
     await ensureAdminsTableAndDefault();
     await ensureMessagesAndPayments();
+    await ensureUsersTable();
+    // try to add user_id column to requests table if missing
+    try {
+      await db.query('ALTER TABLE requests ADD COLUMN IF NOT EXISTS user_id INTEGER');
+    } catch (e) {
+      // Some DBs (SQLite) don't support IF NOT EXISTS in ALTER; try a safe path
+      try { await db.query('ALTER TABLE requests ADD COLUMN user_id INTEGER'); } catch (ee) { /* ignore */ }
+    }
   } catch (e) {
     console.error('Startup table initialization error:', e);
   }

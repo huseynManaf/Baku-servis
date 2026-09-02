@@ -35,6 +35,21 @@
     });
   }
 
+  // Poll services version and refresh when it changes
+  let lastServicesVersion = null;
+  async function pollServicesVersion() {
+    try {
+      const r = await fetch('/api/services/version');
+      const j = await r.json();
+      if (lastServicesVersion === null) lastServicesVersion = j.version;
+      if (j.version && j.version !== lastServicesVersion) {
+        lastServicesVersion = j.version;
+        await loadServices();
+      }
+    } catch (e) { /* ignore */ }
+  }
+  setInterval(pollServicesVersion, 5000);
+
   function escapeHtml(str) {
     return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }

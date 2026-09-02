@@ -231,9 +231,12 @@
       is_active: el('#sv-active').value === '1'
     };
     const url = id ? '/api/admin/services/' + id : '/api/admin/services';
-    await fetch(url, {
-      method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-    });
+    const res = await fetch(url, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(j.error || j.details || 'Xəta baş verdi');
+      return;
+    }
     modal.classList.remove('open');
     loadServices();
   });
