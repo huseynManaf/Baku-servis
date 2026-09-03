@@ -108,6 +108,30 @@
   // ---------- Request detail ----------
   let currentDetailId = null;
   let detailPollTimer = null;
+  let detailMap = null;
+  let detailMarker = null;
+
+  function renderLocationMap(requestData) {
+    const mapHost = el('#d-map');
+    if (!mapHost) return;
+    const lat = Number(requestData.latitude);
+    const lng = Number(requestData.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      mapHost.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-low);font-size:13px">Koordinat yoxdur</div>';
+      return;
+    }
+    if (!detailMap) {
+      detailMap = L.map('d-map').setView([lat, lng], 14);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap'
+      }).addTo(detailMap);
+    }
+    detailMap.setView([lat, lng], 14);
+    if (detailMarker) detailMarker.remove();
+    detailMarker = L.marker([lat, lng]).addTo(detailMap);
+    detailMarker.bindPopup(requestData.address_text || requestData.customer_name || 'Müraciət yeri');
+    setTimeout(() => detailMap.invalidateSize(), 180);
+  }
 
   async function openDetail(id) {
     currentDetailId = id;
@@ -125,6 +149,7 @@
     el('#d-status').value = r.status;
     el('#d-quoted').value = r.quoted_price || '';
     el('#d-final').value = r.final_price || '';
+    renderLocationMap(r);
 
     el('#d-payments').innerHTML = data.payments.length
       ? data.payments.map(p => `<div class="kv"><span>${new Date(p.created_at + 'Z').toLocaleString('az-AZ')}</span><b>${p.amount} ₼ — ${p.status}</b></div>`).join('')
@@ -174,6 +199,7 @@
     await fetch(`/api/admin/requests/${currentDetailId}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
     });
+    await openDetail(currentDetailId);
     el('#d-save').textContent = 'Saxlanıldı ✓';
     setTimeout(() => el('#d-save').textContent = 'Yadda saxla', 1500);
   });

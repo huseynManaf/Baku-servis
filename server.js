@@ -184,6 +184,50 @@ function publicRequest(row) {
   return row;
 }
 
+function formatStatusLabel(status) {
+  const map = {
+    yeni: 'Yeni',
+    baxilir: 'Baxılır',
+    qiymetlendirildi: 'Qiymətləndirildi',
+    icrada: 'İcrada',
+    hazir: 'Hazırdır',
+    teslim: 'Təhvil verilib',
+    legv: 'Ləğv edilib'
+  };
+  return map[status] || status;
+}
+
+async function addRequestUpdateMessage(requestId, previousRow, nextValues) {
+  try {
+    await ensureMessagesAndPayments();
+    const parts = [];
+    const statusBefore = previousRow && previousRow.status ? previousRow.status : null;
+    const statusAfter = nextValues && nextValues.status !== undefined ? nextValues.status : statusBefore;
+    if (statusAfter && statusBefore && statusAfter !== statusBefore) {
+      parts.push(`Status dəyişdirildi: ${formatStatusLabel(statusBefore)} → ${formatStatusLabel(statusAfter)}`);
+    }
+    const prevQuoted = previousRow && previousRow.quoted_price !== null && previousRow.quoted_price !== undefined ? Number(previousRow.quoted_price) : null;
+    const nextQuoted = nextValues && nextValues.quoted_price !== undefined ? Number(nextValues.quoted_price) : prevQuoted;
+    if (nextQuoted !== null && prevQuoted !== null && nextQuoted !== prevQuoted) {
+      parts.push(`Təklif olunan qiymət: ${nextQuoted} ₼`);
+    } else if (nextQuoted !== null && prevQuoted === null && nextValues && nextValues.quoted_price !== undefined) {
+      parts.push(`Təklif olunan qiymət: ${nextQuoted} ₼`);
+    }
+    const prevFinal = previousRow && previousRow.final_price !== null && previousRow.final_price !== undefined ? Number(previousRow.final_price) : null;
+    const nextFinal = nextValues && nextValues.final_price !== undefined ? Number(nextValues.final_price) : prevFinal;
+    if (nextFinal !== null && prevFinal !== null && nextFinal !== prevFinal) {
+      parts.push(`Son qiymət: ${nextFinal} ₼`);
+    } else if (nextFinal !== null && prevFinal === null && nextValues && nextValues.final_price !== undefined) {
+      parts.push(`Son qiymət: ${nextFinal} ₼`);
+    }
+    if (!parts.length) return;
+    const body = parts.join(' | ');
+    await db.query('INSERT INTO messages (request_id, sender, body) VALUES ($1, $2, $3)', [requestId, 'admin', body]);
+  } catch (err) {
+    console.error('addRequestUpdateMessage error:', err && err.message ? err.message : err);
+  }
+}
+
 // =====================================================
 // XİDMƏTLƏR (ictimai - hər kəs görə bilər)
 // =====================================================
@@ -484,6 +528,10 @@ app.get('/api/admin/requests/:id', requireAdmin, async (req, res) => {
 app.put('/api/admin/requests/:id', requireAdmin, async (req, res) => {
   try {
     const { status, quoted_price, final_price } = req.body;
+    const reqRes = await db.query('SELECT * FROM requests WHERE id = $1', [req.params.id]);
+    const previousRow = reqRes.rows[0];
+    if (!previousRow) return res.status(404).json({ error: 'Tapilmadi' });
+
     const parts = [];
     const params = [];
     if (status) { params.push(status); parts.push(`status = $${params.length}`); }
@@ -494,6 +542,7 @@ app.put('/api/admin/requests/:id', requireAdmin, async (req, res) => {
     params.push(req.params.id);
     const q = `UPDATE requests SET ${parts.join(', ')} WHERE id = $${params.length}`;
     await db.query(q, params);
+    await addRequestUpdateMessage(req.params.id, previousRow, { status, quoted_price, final_price });
     res.json({ ok: true });
   } catch (err) {
     console.error('Admin update request error:');

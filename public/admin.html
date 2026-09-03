@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin Panel — HUGU Servis</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -111,6 +112,10 @@
             <p style="margin-top:10px;font-size:13px" id="d-problem"></p>
           </div>
           <div class="card">
+            <h4>Ünvan xəritəsi</h4>
+            <div id="d-map" style="height:220px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#10141c;"></div>
+          </div>
+          <div class="card">
             <h4>Status və qiymət</h4>
             <div class="field">
               <label>Status</label>
@@ -181,6 +186,7 @@
   </div>
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="js/admin.js"></script>
 </body>
 </html>
