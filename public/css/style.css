@@ -392,6 +392,25 @@ footer{border-top:1px solid var(--line);padding:44px 0;}
     padding:16px;
     box-sizing:border-box;
   }
+  #request-panel,
+  #request-panel > .container,
+  .form-row,
+  .field,
+  .field input,
+  .field select,
+  .field textarea,
+  .modal .field,
+  .modal .field input,
+  .modal .field select,
+  .modal .field textarea,
+  .map-search-row,
+  .map-search-row input,
+  .map-search-row button{
+    width:100% !important;
+    max-width:100% !important;
+    box-sizing:border-box;
+    display:block;
+  }
   .field input,
   .field select,
   .field textarea,

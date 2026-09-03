@@ -144,14 +144,35 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  function redirectToAdminLogin() {
+    const currentPath = window.location.pathname;
+    const fallbackUrl = currentPath === '/admin' ? '/admin' : '/admin';
+    if (window.location.pathname !== '/admin') {
+      window.location.href = '/admin';
+      return;
+    }
+    window.location.href = fallbackUrl;
+  }
+
   async function loadRequests() {
     try {
       const response = await fetch('/api/admin/requests');
-      const requests = await response.json();
-      updateStats(requests || []);
+
+      if (response.status === 401 || response.status === 403) {
+        redirectToAdminLogin();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(`Admin requests request failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const requests = Array.isArray(data) ? data : (Array.isArray(data.requests) ? data.requests : []);
+      updateStats(requests);
 
       if (!requestsTable) return;
-      requestsTable.innerHTML = (requests || []).map((request) => `
+      requestsTable.innerHTML = requests.map((request) => `
         <tr data-id="${request.id}" style="cursor:pointer;">
           <td>${request.tracking_code}</td>
           <td>${request.customer_name}</td>
@@ -296,10 +317,21 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadServices() {
     try {
       const response = await fetch('/api/admin/services', { headers: { 'Content-Type': 'application/json' } });
-      const services = await response.json();
+
+      if (response.status === 401 || response.status === 403) {
+        redirectToAdminLogin();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(`Admin services request failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const services = Array.isArray(data) ? data : (Array.isArray(data.services) ? data.services : []);
 
       if (!servicesTable) return;
-      servicesTable.innerHTML = (services || []).map((service) => `
+      servicesTable.innerHTML = services.map((service) => `
         <tr>
           <td>${service.name}</td>
           <td>${service.category}</td>
@@ -317,7 +349,7 @@ document.addEventListener('DOMContentLoaded', () => {
       servicesTable.querySelectorAll('[data-edit-service]').forEach((button) => {
         button.addEventListener('click', async () => {
           const id = Number(button.dataset.editService);
-          const service = (services || []).find((item) => Number(item.id) === id);
+          const service = services.find((item) => Number(item.id) === id);
           if (service) openServiceModal(service);
         });
       });
@@ -337,8 +369,18 @@ document.addEventListener('DOMContentLoaded', () => {
   async function loadAdminChats() {
     try {
       const response = await fetch('/api/admin/chats');
+
+      if (response.status === 401 || response.status === 403) {
+        redirectToAdminLogin();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(`Admin chats request failed: ${response.status}`);
+      }
+
       const data = await response.json();
-      const chats = data.chats || [];
+      const chats = Array.isArray(data.chats) ? data.chats : [];
 
       if (!adminChatList) return;
       adminChatList.innerHTML = chats.length ? chats.map((chat) => `
