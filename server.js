@@ -323,6 +323,7 @@ app.use((req, res, next) => {
     "img-src 'self' data: https: blob:",
     "connect-src 'self' http://localhost:3000 https: ws: wss:",
     "form-action 'self'",
+    "frame-src 'self' https://www.google.com https://www.google.com/maps",
     "upgrade-insecure-requests"
   ].join('; ');
 

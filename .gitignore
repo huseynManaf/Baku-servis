@@ -5,3 +5,6 @@ data/*.db-journal
 data/*.db-wal
 data/*.db-shm
 backups/*.db
+data/*.sqlite
+node_modules/
+.env
