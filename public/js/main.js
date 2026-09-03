@@ -385,31 +385,25 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   function renderTrackResult(data) {
-    console.log('TRACKING RESPONSE:', data);
     const request = data && data.request ? data.request : data;
     if (!request) return;
-
-    el('#track-result').style.display = 'block';
-    el('#tr-service').textContent = request.device_info || 'Müraciətiniz';
-    el('#tr-device').textContent = request.problem_description || '';
 
     const statusValue = String(request.status || 'yeni').trim();
     const chip = el('#tr-status');
     chip.className = 'status-chip status-' + statusValue;
-    chip.textContent = data.status || request.status || statusValue;
+    chip.textContent = statusLabel(statusValue);
 
-    const finalPrice = data.final_price || data.finalPrice;
-    const quotedPrice = data.quoted_price || data.quotedPrice;
-    const displayPrice = finalPrice || quotedPrice;
+    const finalPrice = Number(request.final_price ?? request.finalPrice ?? 0) || 0;
+    const quotedPrice = Number(request.quoted_price ?? request.quotedPrice ?? 0) || 0;
+    const displayPrice = finalPrice > 0 ? finalPrice : quotedPrice;
 
-    if (displayPrice && Number(displayPrice) > 0) {
-      el('#tr-price').textContent = `${displayPrice} ₼`;
-    } else {
-      el('#tr-price').textContent = 'Qiymət gözlənilir';
-    }
+    el('#track-result').style.display = 'block';
+    el('#tr-service').textContent = request.device_info || 'Müraciətiniz';
+    el('#tr-device').textContent = request.problem_description || '';
+    el('#tr-price').textContent = displayPrice > 0 ? `${displayPrice} ₼` : 'Qiymət gözlənilir';
 
     const payBtn = el('#pay-btn');
-    if (displayPrice && Number(displayPrice) > 0 && !request.is_paid) {
+    if (displayPrice > 0 && !request.is_paid) {
       payBtn.style.display = 'inline-flex';
       payBtn.onclick = async () => {
         payBtn.disabled = true; payBtn.textContent = 'Ödəniş edilir...';

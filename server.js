@@ -179,9 +179,20 @@ async function ensureUsersTable() {
   }
 }
 
-function publicRequest(row) {
-  // mushteriye/adminə qaytarilan zaman heç bir gizli sahə yoxdur, sadece formatlayiriq
-  return row;
+function normalizePrice(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const normalized = Number(String(value).replace(/\s+/g, '').replace(',', '.'));
+  return Number.isFinite(normalized) ? normalized : null;
+}
+
+function normalizeRequestRow(row = {}) {
+  return {
+    ...row,
+    status: row.status || row.request_status || 'yeni',
+    quoted_price: normalizePrice(row.quoted_price ?? row.quotedPrice),
+    final_price: normalizePrice(row.final_price ?? row.finalPrice),
+    is_paid: !!row.is_paid
+  };
 }
 
 function formatStatusLabel(status) {
@@ -364,18 +375,8 @@ app.get('/api/requests/track', async (req, res) => {
     console.log('--> TRACKING FETCH FOR CODE:', code, 'DB ROW:', row);
     if (!row) return res.status(404).json({ error: 'Muraciet tapilmadi' });
 
-    const latest = {
-      ...row,
-      status: row.status || row.request_status || 'yeni',
-      quoted_price: row.quoted_price !== null && row.quoted_price !== undefined ? Number(row.quoted_price) : (row.quotedPrice !== null && row.quotedPrice !== undefined ? Number(row.quotedPrice) : null),
-      final_price: row.final_price !== null && row.final_price !== undefined ? Number(row.final_price) : (row.finalPrice !== null && row.finalPrice !== undefined ? Number(row.finalPrice) : null),
-      is_paid: Boolean(row.is_paid)
-    };
-
-    res.json(publicRequest(latest));
+    res.json(normalizeRequestRow(row));
   } catch (err) {
-    console.error('Tracking error:');
-    console.error(err && err.stack ? err.stack : err);
     res.status(500).json({ error: 'Server xətası', details: err && err.message ? err.message : String(err) });
   }
 });
@@ -553,74 +554,42 @@ function normalizeMoneyValue(value) {
 
 async function updateRequestRecord(requestId, payload) {
   const { status, quoted_price, final_price } = payload || {};
-  console.log('UPDATE REQ BODY:', payload);
-
-  const reqRes = await db.query('SELECT * FROM requests WHERE id = $1', [requestId]);
-  const previousRow = reqRes.rows[0];
-  if (!previousRow) {
-    return { error: 'Tapilmadi', statusCode: 404 };
-  }
+  const request = await db.query('SELECT * FROM requests WHERE id = $1', [requestId]);
+  const previousRow = request.rows[0];
+  if (!previousRow) return { error: 'Tapilmadi', statusCode: 404 };
 
   const statusValue = status !== undefined && status !== null && status !== '' ? status : previousRow.status;
-  const quotedValueRaw = quoted_price === undefined ? previousRow.quoted_price : normalizeMoneyValue(quoted_price);
-  const finalValueRaw = final_price === undefined ? previousRow.final_price : normalizeMoneyValue(final_price);
-  const quotedValue = quotedValueRaw !== null && quotedValueRaw !== undefined ? Number(quotedValueRaw) : null;
-  const finalValue = finalValueRaw !== null && finalValueRaw !== undefined ? Number(finalValueRaw) : null;
+  const quotedValue = quoted_price === undefined ? normalizePrice(previousRow.quoted_price) : normalizeMoneyValue(quoted_price);
+  const finalValue = final_price === undefined ? normalizePrice(previousRow.final_price) : normalizeMoneyValue(final_price);
 
-  const isPg = !!(db && db.pool);
-  const sql = isPg
+  const sql = db && db.pool
     ? 'UPDATE requests SET status = COALESCE($1, status), quoted_price = $2, final_price = $3 WHERE id = $4'
     : 'UPDATE requests SET status = COALESCE(?, status), quoted_price = ?, final_price = ? WHERE id = ?';
-
-  const params = isPg
+  const params = db && db.pool
     ? [statusValue, quotedValue, finalValue, requestId]
     : [statusValue, quotedValue, finalValue, requestId];
 
-  console.log('UPDATE SQL:', sql, 'PARAMS:', params);
-  const result = await db.query(sql, params);
-  console.log('DB UPDATE RESULT:', result);
-
-  const updatedQuery = await db.query('SELECT * FROM requests WHERE id = $1', [requestId]);
-  const updatedRow = updatedQuery.rows[0];
+  await db.query(sql, params);
+  const updatedRow = (await db.query('SELECT * FROM requests WHERE id = $1', [requestId])).rows[0];
   await addRequestUpdateMessage(requestId, previousRow, { status: statusValue, quoted_price: quotedValue, final_price: finalValue });
-  return { success: true, updated: { id: requestId, status: updatedRow && updatedRow.status ? updatedRow.status : statusValue, quoted_price: updatedRow ? updatedRow.quoted_price : quotedValue, final_price: updatedRow ? updatedRow.final_price : finalValue } };
+
+  return {
+    success: true,
+    updated: {
+      id: requestId,
+      status: updatedRow && updatedRow.status ? updatedRow.status : statusValue,
+      quoted_price: updatedRow ? normalizePrice(updatedRow.quoted_price) : quotedValue,
+      final_price: updatedRow ? normalizePrice(updatedRow.final_price) : finalValue
+    }
+  };
 }
 
 app.put('/api/requests/:id', requireAdmin, async (req, res) => {
   try {
-    console.log('UPDATE REQ BODY:', req.body);
     const result = await updateRequestRecord(req.params.id, req.body);
     if (result && result.error) return res.status(result.statusCode || 400).json({ error: result.error });
     res.json(result);
   } catch (err) {
-    console.error('Admin update request error:');
-    console.error(err && err.stack ? err.stack : err);
-    res.status(500).json({ error: 'Server xətası', details: err && err.message ? err.message : String(err) });
-  }
-});
-
-app.post('/api/requests/:id', requireAdmin, async (req, res) => {
-  try {
-    console.log('UPDATE REQ BODY:', req.body);
-    const result = await updateRequestRecord(req.params.id, req.body);
-    if (result && result.error) return res.status(result.statusCode || 400).json({ error: result.error });
-    res.json(result);
-  } catch (err) {
-    console.error('Admin update request error:');
-    console.error(err && err.stack ? err.stack : err);
-    res.status(500).json({ error: 'Server xətası', details: err && err.message ? err.message : String(err) });
-  }
-});
-
-app.put('/api/admin/requests/:id', requireAdmin, async (req, res) => {
-  try {
-    console.log('UPDATE REQ BODY:', req.body);
-    const result = await updateRequestRecord(req.params.id, req.body);
-    if (result && result.error) return res.status(result.statusCode || 400).json({ error: result.error });
-    res.json(result);
-  } catch (err) {
-    console.error('Admin update request error:');
-    console.error(err && err.stack ? err.stack : err);
     res.status(500).json({ error: 'Server xətası', details: err && err.message ? err.message : String(err) });
   }
 });

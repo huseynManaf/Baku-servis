@@ -214,17 +214,13 @@
 
   saveButton.addEventListener('click', async (e) => {
     e.preventDefault();
-    const currentStatus = statusSelect ? statusSelect.value : '';
-    const currentQuotedPrice = quotedPriceInput ? quotedPriceInput.value : '';
-    const currentFinalPrice = finalPriceInput ? finalPriceInput.value : '';
+    if (!currentDetailId) return;
 
     const payload = {
-      status: currentStatus || undefined,
-      quoted_price: currentQuotedPrice === '' ? null : currentQuotedPrice,
-      final_price: currentFinalPrice === '' ? null : currentFinalPrice
+      status: statusSelect ? statusSelect.value : '',
+      quoted_price: quotedPriceInput ? quotedPriceInput.value : '',
+      final_price: finalPriceInput ? finalPriceInput.value : ''
     };
-
-    console.log('Saving payload:', payload);
 
     const response = await fetch(`/api/requests/${currentDetailId}`, {
       method: 'PUT',
@@ -233,16 +229,13 @@
     });
     const result = await response.json();
     const updated = result && result.updated ? result.updated : result;
-    console.log('Save response:', result);
 
-    if (statusSelect) statusSelect.value = updated && updated.status ? updated.status : currentStatus;
-    if (quotedPriceInput) quotedPriceInput.value = updated && updated.quoted_price !== null && updated.quoted_price !== undefined && updated.quoted_price !== '' ? updated.quoted_price : currentQuotedPrice;
-    if (finalPriceInput) finalPriceInput.value = updated && updated.final_price !== null && updated.final_price !== undefined && updated.final_price !== '' ? updated.final_price : currentFinalPrice;
+    if (statusSelect && updated && updated.status) statusSelect.value = updated.status;
+    if (quotedPriceInput && updated && updated.quoted_price !== null && updated.quoted_price !== undefined) quotedPriceInput.value = updated.quoted_price;
+    if (finalPriceInput && updated && updated.final_price !== null && updated.final_price !== undefined) finalPriceInput.value = updated.final_price;
 
     if (saveButton) saveButton.textContent = 'Saxlanıldı ✓';
-    setTimeout(() => {
-      if (saveButton) saveButton.textContent = 'Yadda saxla';
-    }, 1500);
+    setTimeout(() => { if (saveButton) saveButton.textContent = 'Yadda saxla'; }, 1200);
   });
 
   // ---------- Services CRUD ----------
