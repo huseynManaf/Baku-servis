@@ -111,6 +111,26 @@
   let detailMap = null;
   let detailMarker = null;
 
+  function setFormValue(selectors, value) {
+    const normalized = value === null || value === undefined ? '' : String(value);
+    selectors.forEach((selector) => {
+      const field = el(selector);
+      if (!field) return;
+      field.value = normalized;
+    });
+  }
+
+  function populateRequestForm(r) {
+    const request = r || {};
+    setFormValue(['#statusSelect', '#d-status'], request.status || '');
+    setFormValue(['#quotedPriceInput', '#d-quoted'], request.quoted_price === '' || request.quoted_price === null || request.quoted_price === undefined ? '' : request.quoted_price);
+    setFormValue(['#finalPriceInput', '#d-final'], request.final_price === '' || request.final_price === null || request.final_price === undefined ? '' : request.final_price);
+    setFormValue(['#customerNameInput'], request.customer_name || '');
+    setFormValue(['#phoneInput'], request.phone || '');
+    setFormValue(['#deviceInput'], request.device_info || '');
+    setFormValue(['#serviceInput'], request.service_name || '');
+  }
+
   function renderLocationMap(requestData) {
     const mapHost = el('#d-map');
     if (!mapHost) return;
@@ -146,9 +166,7 @@
     el('#d-visit').textContent = r.visit_type === 'evde' ? 'Evdə xidmət' : 'Servisdə';
     el('#d-address').textContent = r.address_text || (r.latitude ? `${r.latitude}, ${r.longitude}` : '-');
     el('#d-problem').textContent = r.problem_description || '';
-    el('#d-status').value = r.status;
-    el('#d-quoted').value = r.quoted_price || '';
-    el('#d-final').value = r.final_price || '';
+    populateRequestForm(r);
     renderLocationMap(r);
 
     el('#d-payments').innerHTML = data.payments.length
@@ -191,11 +209,21 @@
   }
 
   el('#d-save').addEventListener('click', async () => {
-    const payload = {
-      status: el('#d-status').value,
-      quoted_price: el('#d-quoted').value ? parseFloat(el('#d-quoted').value) : undefined,
-      final_price: el('#d-final').value ? parseFloat(el('#d-final').value) : undefined
+    const getNumberValue = (selectors) => {
+      for (const selector of selectors) {
+        const field = el(selector);
+        if (!field || field.value === '') continue;
+        return Number(field.value);
+      }
+      return undefined;
     };
+
+    const payload = {
+      status: (el('#statusSelect') || el('#d-status'))?.value || undefined,
+      quoted_price: getNumberValue(['#quotedPriceInput', '#d-quoted']),
+      final_price: getNumberValue(['#finalPriceInput', '#d-final'])
+    };
+
     await fetch(`/api/admin/requests/${currentDetailId}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
     });

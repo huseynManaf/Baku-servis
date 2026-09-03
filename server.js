@@ -510,6 +510,14 @@ app.get('/api/admin/requests/:id', requireAdmin, async (req, res) => {
     const reqRes = await db.query(`SELECT r.*, s.name AS service_name FROM requests r LEFT JOIN services s ON s.id = r.service_id WHERE r.id = $1`, [req.params.id]);
     const row = reqRes.rows[0];
     if (!row) return res.status(404).json({ error: 'Tapilmadi' });
+
+    const normalizedRequest = {
+      ...row,
+      status: row.status || '',
+      quoted_price: row.quoted_price === null || row.quoted_price === undefined ? '' : Number(row.quoted_price),
+      final_price: row.final_price === null || row.final_price === undefined ? '' : Number(row.final_price)
+    };
+
     let messages = [];
     let payments = [];
     try {
@@ -526,7 +534,7 @@ app.get('/api/admin/requests/:id', requireAdmin, async (req, res) => {
       console.error('Failed to load payments for request', req.params.id, e && e.message ? e.message : e);
       payments = [];
     }
-    res.json({ request: row, messages, payments });
+    res.json({ request: normalizedRequest, messages, payments });
   } catch (err) {
     console.error('Admin get request error:');
     console.error(err && err.stack ? err.stack : err);
