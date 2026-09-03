@@ -1,203 +1,200 @@
 <!DOCTYPE html>
 <html lang="az">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Admin Panel — HUGU Servis</title>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="css/style.css">
-</head>
-<body>
-
-<!-- LOGIN VIEW -->
-<div class="login-wrap" id="login-view">
-  <div class="login-card">
-    <div class="brand"><span class="dot"></span>HUGU Servis</div>
-    <h3 style="text-align:center;margin-bottom:20px">Admin Panelə giriş</h3>
-    <form id="login-form">
-      <div class="field">
-        <label>İstifadəçi adı</label>
-        <input type="text" name="username" required>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Panel | HUGU Servis</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/style.css" />
+    <style>
+      body { margin: 0; background: #0d1117; color: #edf3ff; font-family: 'Inter', sans-serif; }
+      .login-shell { min-height: 100vh; display: grid; place-items: center; background: linear-gradient(135deg, #0b1320, #121b26); }
+      .login-box { width: min(420px, calc(100vw - 32px)); background: #151c25; border: 1px solid #2b394a; border-radius: 18px; padding: 28px; box-shadow: 0 28px 70px rgba(0,0,0,.35); }
+      .admin-shell { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+      .sidebar { background: #101922; border-right: 1px solid #2c3747; padding: 20px 18px; }
+      .nav-item { display: block; padding: 12px 14px; margin-bottom: 8px; border-radius: 10px; color: #dfeeff; text-decoration: none; }
+      .nav-item.active { background: #1d2d3a; border: 1px solid #314965; }
+      .main { padding: 24px; }
+      .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
+      .panel { background: #151c25; border: 1px solid #2b394a; border-radius: 18px; padding: 20px; }
+      .table-wrap { overflow: auto; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { padding: 12px 10px; border-bottom: 1px solid #2b394a; text-align: left; }
+      .status-badge { display: inline-flex; padding: 6px 10px; border-radius: 999px; font-size: 0.8rem; background: #1d2d3a; }
+      .field { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+      label { color: #b9cade; font-size: 0.9rem; }
+      input, select, button { font: inherit; }
+      input, select { width: 100%; box-sizing: border-box; border: 1px solid #324559; border-radius: 10px; background: #0e1721; color: #edf5ff; padding: 11px 12px; }
+      button { border: none; border-radius: 10px; cursor: pointer; padding: 11px 14px; }
+      .primary { background: #20c55d; color: #05140b; font-weight: 700; }
+      .secondary { background: #243447; color: #edf5ff; }
+      .danger { background: #3a1d1d; color: #ffd1d1; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+      .small { font-size: 0.8rem; color: #a7bbd3; }
+      @media (max-width: 900px) { .admin-shell { grid-template-columns: 1fr; } .sidebar { border-right: none; border-bottom: 1px solid #2c3747; } .grid { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <div id="login-view" class="login-shell">
+      <div class="login-box">
+        <h2 style="margin-top:0; text-align:center;">Admin girişi</h2>
+        <form id="login-form">
+          <div class="field">
+            <label for="username">İstifadəçi adı</label>
+            <input id="username" name="username" type="text" required />
+          </div>
+          <div class="field">
+            <label for="password">Şifrə</label>
+            <input id="password" name="password" type="password" required />
+          </div>
+          <button type="submit" class="primary" style="width:100%;">Daxil ol</button>
+          <div id="login-message" class="small" style="margin-top:12px;"></div>
+        </form>
       </div>
-      <div class="field">
-        <label>Şifrə</label>
-        <input type="password" name="password" required>
-      </div>
-      <button class="btn btn-primary btn-block" type="submit">Daxil ol</button>
-      <div class="form-msg" id="login-msg"></div>
-    </form>
-  </div>
-</div>
-
-<!-- ADMIN SHELL -->
-<div class="admin-shell" id="admin-view" style="display:none">
-  <aside class="admin-side">
-    <div class="brand"><span class="dot"></span>HUGU Servis</div>
-    <a data-view="dashboard" class="nav-item active">İdarə paneli</a>
-    <a data-view="requests" class="nav-item">Müraciətlər</a>
-    <a data-view="services" class="nav-item">Xidmətlər</a>
-    <div style="flex:1"></div>
-    <a id="logout-btn" style="color:var(--danger)">Çıxış</a>
-  </aside>
-
-  <main class="admin-main">
-    <div class="admin-top">
-      <h2 id="page-title">İdarə paneli</h2>
-      <span id="admin-username" style="color:var(--text-low);font-size:13px"></span>
     </div>
 
-    <!-- DASHBOARD -->
-    <section id="view-dashboard">
-      <div class="stat-grid">
-        <div class="stat-card"><b id="s-total">0</b><span>ümumi müraciət</span></div>
-        <div class="stat-card"><b id="s-yeni">0</b><span>yeni</span></div>
-        <div class="stat-card"><b id="s-icrada">0</b><span>icrada</span></div>
-        <div class="stat-card"><b id="s-gelir">0 ₼</b><span>toplam ödənilmiş</span></div>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Kod</th><th>Müştəri</th><th>Xidmət</th><th>Status</th><th>Tarix</th></tr></thead>
-          <tbody id="dash-recent"></tbody>
-        </table>
-      </div>
-    </section>
+    <div id="admin-view" class="admin-shell" style="display:none;">
+      <aside class="sidebar">
+        <div style="font-weight:700; margin-bottom:20px;">HUGU SERVIS</div>
+        <a href="#" class="nav-item active" data-view="requests">Müraciətlər</a>
+        <a href="#" class="nav-item" data-view="services">Xidmətlər</a>
+        <div style="margin-top:30px;">
+          <button id="logout-btn" class="secondary" style="width:100%;">Çıxış</button>
+        </div>
+      </aside>
 
-    <!-- REQUESTS LIST -->
-    <section id="view-requests" style="display:none">
-      <div class="tabs" id="status-tabs">
-        <div class="tab active" data-status="hamisi">Hamısı</div>
-        <div class="tab" data-status="yeni">Yeni</div>
-        <div class="tab" data-status="baxilir">Baxılır</div>
-        <div class="tab" data-status="qiymetlendirildi">Qiymətləndirildi</div>
-        <div class="tab" data-status="icrada">İcrada</div>
-        <div class="tab" data-status="hazir">Hazırdır</div>
-        <div class="tab" data-status="teslim">Təhvil verilib</div>
-        <div class="tab" data-status="legv">Ləğv</div>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Kod</th><th>Müştəri</th><th>Telefon</th><th>Xidmət</th><th>Forma</th><th>Status</th><th>Qiymət</th></tr></thead>
-          <tbody id="requests-tbody"></tbody>
-        </table>
-      </div>
-    </section>
+      <main class="main">
+        <div class="topbar">
+          <h2 style="margin:0;">Admin panel</h2>
+          <span class="small" id="admin-user">-</span>
+        </div>
 
-    <!-- REQUEST DETAIL -->
-    <section id="view-detail" style="display:none">
-      <a class="btn-ghost" id="back-to-list" style="cursor:pointer">&larr; Siyahıya qayıt</a>
-      <div class="detail-grid" style="margin-top:16px">
-        <div>
-          <div class="card">
-            <h4>Yazışma</h4>
-            <div class="chat-box" style="height:320px">
-              <div class="chat-log" id="d-chat-log"></div>
-              <div class="chat-input">
-                <input type="text" id="d-chat-input" placeholder="Müştəriyə cavab yazın...">
-                <button class="btn btn-primary btn-sm" id="d-chat-send">Göndər</button>
+        <section id="requests-view">
+          <div class="panel">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Kod</th>
+                    <th>Müştəri</th>
+                    <th>Telefon</th>
+                    <th>Xidmət</th>
+                    <th>Yaradılıb</th>
+                    <th>Status</th>
+                    <th>Qiymət</th>
+                  </tr>
+                </thead>
+                <tbody id="requests-table"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section id="services-view" style="display:none;">
+          <div class="panel">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+              <h3 style="margin:0;">Xidmətlər</h3>
+              <button id="add-service-btn" class="primary">+ Yeni xidmət</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ad</th>
+                    <th>Kateqoriya</th>
+                    <th>Yaradılıb</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="services-table"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section id="detail-view" style="display:none; margin-top:20px;">
+          <div class="grid">
+            <div class="panel">
+              <h3 style="margin-top:0;">Müraciət məlumatı</h3>
+              <div class="field">
+                <label>Kod</label>
+                <input id="detail-code" type="text" readonly />
+              </div>
+              <div class="field">
+                <label>Müştəri</label>
+                <input id="detail-name" type="text" readonly />
+              </div>
+              <div class="field">
+                <label>Telefon</label>
+                <input id="detail-phone" type="text" readonly />
+              </div>
+              <div class="field">
+                <label>Cihaz</label>
+                <input id="detail-device" type="text" readonly />
+              </div>
+              <div class="field">
+                <label>Xidmət</label>
+                <input id="detail-service" type="text" readonly />
+              </div>
+              <div class="field">
+                <label>Yaradılıb</label>
+                <input id="detail-created" type="text" readonly />
               </div>
             </div>
-          </div>
-        </div>
-        <div>
-          <div class="card">
-            <h4>Müraciət məlumatı</h4>
-            <div class="kv"><span>Kod</span><b id="d-code"></b></div>
-            <div class="kv"><span>Müştəri</span><b id="d-name"></b></div>
-            <div class="kv"><span>Telefon</span><b id="d-phone"></b></div>
-            <div class="kv"><span>Cihaz</span><b id="d-device"></b></div>
-            <div class="kv"><span>Xidmət</span><b id="d-service"></b></div>
-            <div class="kv"><span>Forma</span><b id="d-visit"></b></div>
-            <div class="kv"><span>Ünvan</span><b id="d-address"></b></div>
-            <p style="margin-top:10px;font-size:13px" id="d-problem"></p>
-          </div>
-          <div class="card">
-            <h4>Ünvan xəritəsi</h4>
-            <div id="d-map" style="height:220px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#10141c;"></div>
-          </div>
-          <div class="card">
-            <h4>Status və qiymət</h4>
-            <div class="field">
-              <label>Status</label>
-              <select class="status-select" id="statusSelect">
-                <option value="yeni">Yeni</option>
-                <option value="baxilir">Baxılır</option>
-                <option value="qiymetlendirildi">Qiymətləndirildi</option>
-                <option value="icrada">İcrada</option>
-                <option value="hazir">Hazırdır</option>
-                <option value="teslim">Təhvil verilib</option>
-                <option value="legv">Ləğv edilib</option>
-              </select>
-              <select class="status-select" id="d-status" style="display:none">
-                <option value="yeni">Yeni</option>
-                <option value="baxilir">Baxılır</option>
-                <option value="qiymetlendirildi">Qiymətləndirildi</option>
-                <option value="icrada">İcrada</option>
-                <option value="hazir">Hazırdır</option>
-                <option value="teslim">Təhvil verilib</option>
-                <option value="legv">Ləğv edilib</option>
-              </select>
-            </div>
-            <div class="field">
-              <label>Təklif olunan qiymət (₼)</label>
-              <input type="number" id="quotedPriceInput" step="0.01">
-              <input type="number" id="d-quoted" step="0.01" style="display:none">
-            </div>
-            <div class="field">
-              <label>Son qiymət (₼)</label>
-              <input type="number" id="finalPriceInput" step="0.01">
-              <input type="number" id="d-final" step="0.01" style="display:none">
-            </div>
-            <button class="btn btn-primary btn-block" id="d-save">Yadda saxla</button>
-          </div>
-          <div class="card" id="d-payments-card">
-            <h4>Ödənişlər</h4>
-            <div id="d-payments"></div>
-          </div>
-        </div>
-      </div>
-    </section>
 
-    <!-- SERVICES -->
-    <section id="view-services" style="display:none">
-      <button class="btn btn-primary btn-sm" id="add-service-btn" style="margin-bottom:16px">+ Yeni xidmət əlavə et</button>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Ad</th><th>Kateqoriya</th><th>Qiymət</th><th>Endirimli</th><th>Aktiv</th><th></th></tr></thead>
-          <tbody id="services-tbody"></tbody>
-        </table>
-      </div>
-    </section>
-  </main>
-</div>
+            <div class="panel">
+              <h3 style="margin-top:0;">Status və qiymət</h3>
+              <div class="field">
+                <label>Status</label>
+                <select id="detail-status">
+                  <option value="Gözləmədə">Gözləmədə</option>
+                  <option value="Qiymətləndirildi">Qiymətləndirildi</option>
+                  <option value="Hazırdır">Hazırdır</option>
+                  <option value="İcrada">İcrada</option>
+                  <option value="Təhvil verilib">Təhvil verilib</option>
+                </select>
+              </div>
 
-<!-- SERVICE MODAL -->
-<div class="modal-overlay" id="service-modal">
-  <div class="modal">
-    <div class="modal-head">
-      <h3 id="service-modal-title">Yeni xidmət</h3>
-      <button class="btn-ghost" id="service-modal-close">✕</button>
+              <div class="field">
+                <label>Təklif olunan qiymət (₼)</label>
+                <input id="detail-quoted" type="number" step="0.01" min="0" />
+              </div>
+
+              <div class="field">
+                <label>Son qiymət (₼)</label>
+                <input id="detail-final" type="number" step="0.01" min="0" />
+              </div>
+
+              <button id="save-request-btn" class="primary" style="width:100%;">Yadda saxla</button>
+              <button id="back-to-list-btn" class="secondary" style="width:100%; margin-top:10px;">Siyahıya qayıt</button>
+            </div>
+          </div>
+        </section>
+      </main>
     </div>
-    <form id="service-form">
-      <input type="hidden" id="sv-id">
-      <div class="field"><label>Ad</label><input type="text" id="sv-name" required></div>
-      <div class="form-row">
-        <div class="field"><label>Kateqoriya</label><input type="text" id="sv-category" placeholder="format, notebook, hardware..."></div>
-        <div class="field"><label>Aktivdir</label>
-          <select id="sv-active"><option value="1">Bəli</option><option value="0">Xeyr</option></select>
-        </div>
-      </div>
-      <div class="field"><label>Açıqlama</label><textarea id="sv-description"></textarea></div>
-      <div class="form-row">
-        <div class="field"><label>Qiymət (₼)</label><input type="number" step="0.01" id="sv-price" required></div>
-        <div class="field"><label>Endirimli qiymət (₼, boş buraxıla bilər)</label><input type="number" step="0.01" id="sv-discount"></div>
-      </div>
-      <button class="btn btn-primary btn-block" type="submit">Yadda saxla</button>
-    </form>
-  </div>
-</div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="js/admin.js"></script>
-</body>
+    <div id="service-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); place-items:center;">
+      <div class="panel" style="width:min(420px, calc(100vw - 30px));">
+        <h3 style="margin-top:0;">Yeni xidmət</h3>
+        <form id="service-form">
+          <div class="field">
+            <label>Xidmət adı</label>
+            <input id="service-name" name="name" type="text" required />
+          </div>
+          <div class="field">
+            <label>Kateqoriya</label>
+            <input id="service-category" name="category" type="text" placeholder="Laptop, Komputer, Hardware" />
+          </div>
+          <div style="display:flex; gap:10px;">
+            <button type="submit" class="primary" style="flex:1;">Əlavə et</button>
+            <button type="button" id="close-service-modal" class="secondary" style="flex:1;">Ləğv et</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src="js/admin.js"></script>
+  </body>
 </html>

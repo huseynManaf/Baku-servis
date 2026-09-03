@@ -1,305 +1,218 @@
-// public/js/admin.js
-(function () {
-  const el = (sel, root = document) => root.querySelector(sel);
-  const els = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+document.addEventListener('DOMContentLoaded', () => {
+  const loginView = document.getElementById('login-view');
+  const adminView = document.getElementById('admin-view');
+  const loginForm = document.getElementById('login-form');
+  const loginMessage = document.getElementById('login-message');
+  const adminUser = document.getElementById('admin-user');
+  const requestsTable = document.getElementById('requests-table');
+  const servicesTable = document.getElementById('services-table');
+  const requestsView = document.getElementById('requests-view');
+  const servicesView = document.getElementById('services-view');
+  const detailView = document.getElementById('detail-view');
+  const serviceModal = document.getElementById('service-modal');
 
-  function escapeHtml(str) {
-    return String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  let selectedRequestId = null;
+
+  function showView(target) {
+    requestsView.style.display = target === 'requests' ? 'block' : 'none';
+    servicesView.style.display = target === 'services' ? 'block' : 'none';
+    detailView.style.display = target === 'detail' ? 'block' : 'none';
+
+    document.querySelectorAll('.nav-item').forEach((item) => {
+      item.classList.toggle('active', item.dataset.view === target);
+    });
   }
-  const statusLabel = (s) => ({
-    yeni: 'Yeni', baxilir: 'Baxılır', qiymetlendirildi: 'Qiymətləndirildi',
-    icrada: 'İcrada', hazir: 'Hazırdır', teslim: 'Təhvil verilib', legv: 'Ləğv edilib'
-  }[s] || s);
 
-  // ---------- Auth ----------
+  function formatDateTime(value) {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+
   async function checkAuth() {
-    const res = await fetch('/api/admin/me');
-    const data = await res.json();
+    const response = await fetch('/api/admin/me');
+    const data = await response.json();
+
     if (data.loggedIn) {
-      el('#login-view').style.display = 'none';
-      el('#admin-view').style.display = 'grid';
-      el('#admin-username').textContent = data.username;
-      showView('dashboard');
+      loginView.style.display = 'none';
+      adminView.style.display = 'grid';
+      adminUser.textContent = `İstifadəçi: ${data.username}`;
+      showView('requests');
+      loadRequests();
+      loadServices();
     } else {
-      el('#login-view').style.display = 'flex';
-      el('#admin-view').style.display = 'none';
+      loginView.style.display = 'grid';
+      adminView.style.display = 'none';
     }
   }
 
-  el('#login-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const res = await fetch('/api/admin/login', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(Object.fromEntries(fd.entries()))
-    });
-    const data = await res.json();
-    const msg = el('#login-msg');
-    if (!res.ok) { msg.className = 'form-msg err'; msg.textContent = data.error || data.details || JSON.stringify(data); return; }
-    msg.className = 'form-msg'; msg.textContent = '';
-    checkAuth();
-  });
-
-  el('#logout-btn').addEventListener('click', async () => {
-    await fetch('/api/admin/logout', { method: 'POST' });
-    checkAuth();
-  });
-
-  // ---------- Nav / views ----------
-  const viewTitles = { dashboard: 'İdarə paneli', requests: 'Müraciətlər', services: 'Xidmətlər', detail: 'Müraciət detalı' };
-  function showView(name) {
-    ['dashboard', 'requests', 'detail', 'services'].forEach(v => {
-      el('#view-' + v).style.display = v === name ? 'block' : 'none';
-    });
-    els('.admin-side .nav-item').forEach(a => a.classList.toggle('active', a.dataset.view === name));
-    el('#page-title').textContent = viewTitles[name];
-    if (name === 'dashboard') loadDashboard();
-    if (name === 'requests') loadRequests('hamisi');
-    if (name === 'services') loadServices();
-  }
-  els('.admin-side .nav-item').forEach(a => a.addEventListener('click', () => showView(a.dataset.view)));
-
-  // ---------- Dashboard ----------
-  async function loadDashboard() {
-    const stats = await (await fetch('/api/admin/stats')).json();
-    el('#s-total').textContent = stats.total;
-    el('#s-yeni').textContent = stats.yeni;
-    el('#s-icrada').textContent = stats.icrada;
-    el('#s-gelir').textContent = stats.gelir + ' ₼';
-
-    const rows = await (await fetch('/api/admin/requests')).json();
-    el('#dash-recent').innerHTML = rows.slice(0, 8).map(r => `
-      <tr class="clickable" data-id="${r.id}">
-        <td>${r.tracking_code}</td>
-        <td>${escapeHtml(r.customer_name)}</td>
-        <td>${escapeHtml(r.service_name || '-')}</td>
-        <td><span class="status-chip status-${r.status}">${statusLabel(r.status)}</span></td>
-        <td>${new Date(r.created_at + 'Z').toLocaleDateString('az-AZ')}</td>
-      </tr>
-    `).join('');
-    els('#dash-recent tr').forEach(tr => tr.addEventListener('click', () => openDetail(tr.dataset.id)));
-  }
-
-  // ---------- Requests list ----------
-  els('#status-tabs .tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      els('#status-tabs .tab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      loadRequests(tab.dataset.status);
-    });
-  });
-
-  async function loadRequests(status) {
-    const rows = await (await fetch('/api/admin/requests?status=' + status)).json();
-    el('#requests-tbody').innerHTML = rows.map(r => `
-      <tr class="clickable" data-id="${r.id}">
-        <td>${r.tracking_code}</td>
-        <td>${escapeHtml(r.customer_name)}</td>
-        <td>${escapeHtml(r.phone)}</td>
-        <td>${escapeHtml(r.service_name || '-')}</td>
-        <td>${r.visit_type === 'evde' ? 'Evdə' : 'Servisdə'}</td>
-        <td><span class="status-chip status-${r.status}">${statusLabel(r.status)}</span></td>
-        <td>${r.final_price || r.quoted_price || '-'}</td>
-      </tr>
-    `).join('') || '<tr><td colspan="7" style="color:var(--text-low)">Bu statusda müraciət yoxdur</td></tr>';
-    els('#requests-tbody tr[data-id]').forEach(tr => tr.addEventListener('click', () => openDetail(tr.dataset.id)));
-  }
-
-  // ---------- Request detail ----------
-  let currentDetailId = null;
-  let detailPollTimer = null;
-  let detailMap = null;
-  let detailMarker = null;
-
-  const statusSelect = document.getElementById('statusSelect') || document.getElementById('d-status');
-  const quotedPriceInput = document.getElementById('quotedPriceInput') || document.getElementById('d-quoted');
-  const finalPriceInput = document.getElementById('finalPriceInput') || document.getElementById('d-final');
-  const saveButton = document.getElementById('d-save');
-
-  function setFormValue(selector, value) {
-    const field = el(selector);
-    if (!field) return;
-    const normalized = value === null || value === undefined || value === '' ? '' : String(value);
-    field.value = normalized;
-  }
-
-  function populateRequestForm(r) {
-    const request = r || {};
-    const quotedValue = request.quoted_price === null || request.quoted_price === undefined || request.quoted_price === '' ? '' : request.quoted_price;
-    const finalValue = request.final_price === null || request.final_price === undefined || request.final_price === '' ? '' : request.final_price;
-    setFormValue('#statusSelect', request.status || '');
-    setFormValue('#quotedPriceInput', quotedValue);
-    setFormValue('#finalPriceInput', finalValue);
-    if (statusSelect) statusSelect.value = request.status || '';
-    if (quotedPriceInput) quotedPriceInput.value = quotedValue;
-    if (finalPriceInput) finalPriceInput.value = finalValue;
-  }
-
-  function renderLocationMap(requestData) {
-    const mapHost = el('#d-map');
-    if (!mapHost) return;
-    const lat = Number(requestData.latitude);
-    const lng = Number(requestData.longitude);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      mapHost.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-low);font-size:13px">Koordinat yoxdur</div>';
-      return;
-    }
-    if (!detailMap) {
-      detailMap = L.map('d-map').setView([lat, lng], 14);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap'
-      }).addTo(detailMap);
-    }
-    detailMap.setView([lat, lng], 14);
-    if (detailMarker) detailMarker.remove();
-    detailMarker = L.marker([lat, lng]).addTo(detailMap);
-    detailMarker.bindPopup(requestData.address_text || requestData.customer_name || 'Müraciət yeri');
-    setTimeout(() => detailMap.invalidateSize(), 180);
-  }
-
-  async function openDetail(id) {
-    currentDetailId = id;
-    showView('detail');
-    const data = await (await fetch('/api/admin/requests/' + id)).json();
-    const r = data.request;
-    el('#d-code').textContent = r.tracking_code;
-    el('#d-name').textContent = r.customer_name;
-    el('#d-phone').textContent = r.phone;
-    el('#d-device').textContent = r.device_info || '-';
-    el('#d-service').textContent = r.service_name || '-';
-    el('#d-visit').textContent = r.visit_type === 'evde' ? 'Evdə xidmət' : 'Servisdə';
-    el('#d-address').textContent = r.address_text || (r.latitude ? `${r.latitude}, ${r.longitude}` : '-');
-    el('#d-problem').textContent = r.problem_description || '';
-    populateRequestForm(r);
-    renderLocationMap(r);
-
-    el('#d-payments').innerHTML = data.payments.length
-      ? data.payments.map(p => `<div class="kv"><span>${new Date(p.created_at + 'Z').toLocaleString('az-AZ')}</span><b>${p.amount} ₼ — ${p.status}</b></div>`).join('')
-      : '<p style="font-size:13px;margin:0">Ödəniş yoxdur</p>';
-
-    renderDetailChat(data.messages);
-    if (detailPollTimer) clearInterval(detailPollTimer);
-    detailPollTimer = setInterval(async () => {
-      const fresh = await (await fetch('/api/admin/requests/' + id)).json();
-      renderDetailChat(fresh.messages);
-    }, 4000);
-  }
-
-  function renderDetailChat(msgs) {
-    const log = el('#d-chat-log');
-    log.innerHTML = msgs.map(m => `
-      <div class="msg ${m.sender}">
-        ${escapeHtml(m.body)}
-        <time>${new Date(m.created_at + 'Z').toLocaleString('az-AZ', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</time>
-      </div>
-    `).join('');
-    log.scrollTop = log.scrollHeight;
-  }
-
-  el('#back-to-list').addEventListener('click', () => { clearInterval(detailPollTimer); showView('requests'); });
-
-  el('#d-chat-send').addEventListener('click', sendDetailChat);
-  el('#d-chat-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendDetailChat(); });
-  async function sendDetailChat() {
-    const input = el('#d-chat-input');
-    const body = input.value.trim();
-    if (!body) return;
-    input.value = '';
-    await fetch(`/api/admin/requests/${currentDetailId}/messages`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body })
-    });
-    const fresh = await (await fetch('/api/admin/requests/' + currentDetailId)).json();
-    renderDetailChat(fresh.messages);
-  }
-
-  saveButton.addEventListener('click', async (e) => {
-    e.preventDefault();
-    if (!currentDetailId) return;
-
+  loginForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
     const payload = {
-      status: statusSelect ? statusSelect.value : '',
-      quoted_price: quotedPriceInput ? quotedPriceInput.value : '',
-      final_price: finalPriceInput ? finalPriceInput.value : ''
+      username: document.getElementById('username').value.trim(),
+      password: document.getElementById('password').value
     };
 
-    const response = await fetch(`/api/requests/${currentDetailId}`, {
+    const response = await fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const body = await response.json();
+    if (!response.ok) {
+      loginMessage.textContent = body.error || 'Giriş alınmadı.';
+      loginMessage.style.color = '#ffb0b0';
+      return;
+    }
+
+    loginMessage.textContent = '';
+    await checkAuth();
+  });
+
+  document.getElementById('logout-btn')?.addEventListener('click', async () => {
+    await fetch('/api/admin/logout', { method: 'POST' });
+    await checkAuth();
+  });
+
+  document.querySelectorAll('.nav-item').forEach((item) => {
+    item.addEventListener('click', (event) => {
+      event.preventDefault();
+      const view = item.dataset.view;
+      showView(view);
+      if (view === 'requests') loadRequests();
+      if (view === 'services') loadServices();
+    });
+  });
+
+  async function loadRequests() {
+    const response = await fetch('/api/admin/requests');
+    const requests = await response.json();
+
+    requestsTable.innerHTML = (requests || []).map((request) => `
+      <tr data-id="${request.id}" style="cursor:pointer;">
+        <td>${request.tracking_code}</td>
+        <td>${request.customer_name}</td>
+        <td>${request.customer_phone}</td>
+        <td>${request.service_name}</td>
+        <td>${formatDateTime(request.created_at)}</td>
+        <td><span class="status-badge">${request.status}</span></td>
+        <td>${Number(request.final_price || request.quoted_price || 0).toFixed(2)} ₼</td>
+      </tr>
+    `).join('');
+
+    requestsTable.querySelectorAll('tr[data-id]').forEach((row) => {
+      row.addEventListener('click', () => openRequestDetail(Number(row.dataset.id)));
+    });
+  }
+
+  async function openRequestDetail(id) {
+    selectedRequestId = id;
+    const response = await fetch(`/api/admin/requests/${id}`);
+    const body = await response.json();
+    const request = body.request;
+
+    document.getElementById('detail-code').value = request.tracking_code;
+    document.getElementById('detail-name').value = request.customer_name;
+    document.getElementById('detail-phone').value = request.customer_phone;
+    document.getElementById('detail-device').value = request.device_info || '-';
+    document.getElementById('detail-service').value = request.service_name || '-';
+    document.getElementById('detail-created').value = formatDateTime(request.created_at);
+    document.getElementById('detail-status').value = request.status || 'Gözləmədə';
+    document.getElementById('detail-quoted').value = Number(request.quoted_price || 0);
+    document.getElementById('detail-final').value = Number(request.final_price || 0);
+
+    showView('detail');
+  }
+
+  document.getElementById('save-request-btn')?.addEventListener('click', async () => {
+    if (!selectedRequestId) return;
+
+    const payload = {
+      status: document.getElementById('detail-status').value,
+      quoted_price: document.getElementById('detail-quoted').value,
+      final_price: document.getElementById('detail-final').value
+    };
+
+    const response = await fetch(`/api/admin/requests/${selectedRequestId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    const result = await response.json();
-    const updated = result && result.updated ? result.updated : result;
 
-    if (statusSelect && updated && updated.status) statusSelect.value = updated.status;
-    if (quotedPriceInput && updated && updated.quoted_price !== null && updated.quoted_price !== undefined) quotedPriceInput.value = updated.quoted_price;
-    if (finalPriceInput && updated && updated.final_price !== null && updated.final_price !== undefined) finalPriceInput.value = updated.final_price;
+    const body = await response.json();
+    if (!response.ok) {
+      alert(body.error || 'Yeniləmə uğursuz oldu.');
+      return;
+    }
 
-    if (saveButton) saveButton.textContent = 'Saxlanıldı ✓';
-    setTimeout(() => { if (saveButton) saveButton.textContent = 'Yadda saxla'; }, 1200);
+    await loadRequests();
+    alert('Müraciət yeniləndi.');
   });
 
-  // ---------- Services CRUD ----------
+  document.getElementById('back-to-list-btn')?.addEventListener('click', () => {
+    showView('requests');
+    loadRequests();
+  });
+
   async function loadServices() {
-    const rows = await (await fetch('/api/admin/services')).json();
-    el('#services-tbody').innerHTML = rows.map(s => `
+    const response = await fetch('/api/admin/services', { headers: { 'Content-Type': 'application/json' } });
+    const services = await response.json();
+    servicesTable.innerHTML = (services || []).map((service) => `
       <tr>
-        <td>${escapeHtml(s.name)}</td>
-        <td>${escapeHtml(s.category)}</td>
-        <td>${s.price} ₼</td>
-        <td>${s.discount_price ? s.discount_price + ' ₼' : '-'}</td>
-        <td>${s.is_active ? 'Bəli' : 'Xeyr'}</td>
-        <td>
-          <button class="btn-ghost edit-svc" data-id="${s.id}">Redaktə</button>
-          <button class="btn-ghost del-svc" data-id="${s.id}" style="color:var(--danger)">Sil</button>
-        </td>
+        <td>${service.name}</td>
+        <td>${service.category}</td>
+        <td>${formatDateTime(service.created_at)}</td>
+        <td><button class="danger" data-delete-service="${service.id}">Sil</button></td>
       </tr>
     `).join('');
 
-    els('.edit-svc').forEach(b => b.addEventListener('click', () => openServiceModal(rows.find(r => r.id == b.dataset.id))));
-    els('.del-svc').forEach(b => b.addEventListener('click', async () => {
-      if (!confirm('Bu xidməti silmək istədiyinizə əminsiniz?')) return;
-      await fetch('/api/admin/services/' + b.dataset.id, { method: 'DELETE' });
-      loadServices();
-    }));
+    servicesTable.querySelectorAll('[data-delete-service]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const id = Number(button.dataset.deleteService);
+        await fetch(`/api/admin/services/${id}`, { method: 'DELETE' });
+        await loadServices();
+      });
+    });
   }
 
-  const modal = el('#service-modal');
-  el('#add-service-btn').addEventListener('click', () => openServiceModal(null));
-  el('#service-modal-close').addEventListener('click', () => modal.classList.remove('open'));
+  document.getElementById('add-service-btn')?.addEventListener('click', () => {
+    serviceModal.style.display = 'grid';
+  });
 
-  function openServiceModal(svc) {
-    el('#service-modal-title').textContent = svc ? 'Xidməti redaktə et' : 'Yeni xidmət';
-    el('#sv-id').value = svc ? svc.id : '';
-    el('#sv-name').value = svc ? svc.name : '';
-    el('#sv-category').value = svc ? svc.category : '';
-    el('#sv-description').value = svc ? svc.description : '';
-    el('#sv-price').value = svc ? svc.price : '';
-    el('#sv-discount').value = svc && svc.discount_price ? svc.discount_price : '';
-    el('#sv-active').value = svc ? String(svc.is_active) : '1';
-    modal.classList.add('open');
-  }
+  document.getElementById('close-service-modal')?.addEventListener('click', () => {
+    serviceModal.style.display = 'none';
+  });
 
-  el('#service-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const id = el('#sv-id').value;
+  document.getElementById('service-form')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
     const payload = {
-      name: el('#sv-name').value,
-      category: el('#sv-category').value || 'umumi',
-      description: el('#sv-description').value,
-      price: parseFloat(el('#sv-price').value),
-      discount_price: el('#sv-discount').value ? parseFloat(el('#sv-discount').value) : null,
-      is_active: el('#sv-active').value === '1'
+      name: document.getElementById('service-name').value.trim(),
+      category: document.getElementById('service-category').value.trim() || 'Genel'
     };
-    const url = id ? '/api/admin/services/' + id : '/api/admin/services';
-    const res = await fetch(url, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-    const j = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      alert(j.error || j.details || 'Xəta baş verdi');
+
+    if (!payload.name) {
       return;
     }
-    modal.classList.remove('open');
-    loadServices();
+
+    const response = await fetch('/api/admin/services', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const body = await response.json();
+    if (!response.ok) {
+      alert(body.error || 'Xidmət əlavə edilə bilmədi.');
+      return;
+    }
+
+    serviceModal.style.display = 'none';
+    document.getElementById('service-form').reset();
+    await loadServices();
   });
 
   checkAuth();
-})();
+});

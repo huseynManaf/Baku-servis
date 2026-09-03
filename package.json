@@ -13,14 +13,15 @@
     "cap:sync": "npx cap sync"
   },
   "dependencies": {
+    "@capacitor/android": "^5.0.4",
+    "@capacitor/cli": "^5.0.4",
+    "@capacitor/core": "^5.0.4",
     "bcryptjs": "^2.4.3",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-session": "^1.18.0",
     "pg": "^8.23.0",
-    "@capacitor/core": "^5.0.4",
-    "@capacitor/cli": "^5.0.4",
-    "@capacitor/android": "^5.0.4"
+    "sqlite3": "^6.0.1"
   },
   "engines": {
     "node": ">=18.0.0"
