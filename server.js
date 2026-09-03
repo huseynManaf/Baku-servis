@@ -361,6 +361,7 @@ app.get('/api/requests/track', async (req, res) => {
     if (!code || !phone) return res.status(400).json({ error: 'Kod ve telefon lazimdir' });
     const result = await db.query('SELECT * FROM requests WHERE tracking_code = $1 AND phone = $2', [code, phone]);
     const row = result.rows[0];
+    console.log('--> TRACKING FETCH FOR CODE:', code, 'DB ROW:', row);
     if (!row) return res.status(404).json({ error: 'Muraciet tapilmadi' });
 
     const latest = {
@@ -552,6 +553,8 @@ function normalizeMoneyValue(value) {
 
 async function updateRequestRecord(requestId, payload) {
   const { status, quoted_price, final_price } = payload || {};
+  console.log('--> ADMIN UPDATE RECEIVED:', requestId, payload);
+
   const reqRes = await db.query('SELECT * FROM requests WHERE id = $1', [requestId]);
   const previousRow = reqRes.rows[0];
   if (!previousRow) {
@@ -568,21 +571,24 @@ async function updateRequestRecord(requestId, payload) {
   const sql = isPg
     ? 'UPDATE requests SET status = $1, quoted_price = $2, final_price = $3, updated_at = $4 WHERE id = $5'
     : 'UPDATE requests SET status = ?, quoted_price = ?, final_price = ?, updated_at = ? WHERE id = ?';
+
   const params = isPg
     ? [statusValue, quotedValue, finalValue, new Date().toISOString(), requestId]
     : [statusValue, quotedValue, finalValue, new Date().toISOString(), requestId];
 
-  await db.query(sql, params);
+  console.log('SQL UPDATE:', sql, 'PARAMS:', params);
+  const result = await db.query(sql, params);
+  console.log('--> DB UPDATE RESULT:', result);
 
   const updatedQuery = await db.query('SELECT * FROM requests WHERE id = $1', [requestId]);
   const updatedRow = updatedQuery.rows[0];
   await addRequestUpdateMessage(requestId, previousRow, { status: statusValue, quoted_price: quotedValue, final_price: finalValue });
-  return { success: true, request: updatedRow };
+  return { success: true, data: updatedRow };
 }
 
 app.put('/api/requests/:id', requireAdmin, async (req, res) => {
   try {
-    console.log('Update request req.body:', req.body);
+    console.log('--> ADMIN UPDATE RECEIVED:', req.params.id, req.body);
     const result = await updateRequestRecord(req.params.id, req.body);
     if (result && result.error) return res.status(result.statusCode || 400).json({ error: result.error });
     res.json(result);
@@ -595,7 +601,7 @@ app.put('/api/requests/:id', requireAdmin, async (req, res) => {
 
 app.post('/api/requests/:id', requireAdmin, async (req, res) => {
   try {
-    console.log('Update request req.body:', req.body);
+    console.log('--> ADMIN UPDATE RECEIVED:', req.params.id, req.body);
     const result = await updateRequestRecord(req.params.id, req.body);
     if (result && result.error) return res.status(result.statusCode || 400).json({ error: result.error });
     res.json(result);
@@ -608,7 +614,7 @@ app.post('/api/requests/:id', requireAdmin, async (req, res) => {
 
 app.put('/api/admin/requests/:id', requireAdmin, async (req, res) => {
   try {
-    console.log('Admin update request req.body:', req.body);
+    console.log('--> ADMIN UPDATE RECEIVED:', req.params.id, req.body);
     const result = await updateRequestRecord(req.params.id, req.body);
     if (result && result.error) return res.status(result.statusCode || 400).json({ error: result.error });
     res.json(result);
