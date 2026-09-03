@@ -10,7 +10,8 @@
     "cap:add-android": "npx cap add android",
     "cap:open-android": "npx cap open android",
     "cap:copy": "npx cap copy",
-    "cap:sync": "npx cap sync"
+    "cap:sync": "npx cap sync",
+    "postinstall": "npm rebuild sqlite3 --build-from-source"
   },
   "dependencies": {
     "@capacitor/android": "^5.0.4",

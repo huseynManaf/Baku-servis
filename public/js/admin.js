@@ -10,17 +10,21 @@ document.addEventListener('DOMContentLoaded', () => {
   const servicesView = document.getElementById('services-view');
   const detailView = document.getElementById('detail-view');
   const serviceModal = document.getElementById('service-modal');
+  const statTotal = document.getElementById('stat-total');
+  const statPending = document.getElementById('stat-pending');
+  const statInWork = document.getElementById('stat-inwork');
+  const statReady = document.getElementById('stat-ready');
 
   let selectedRequestId = null;
 
-  function showView(target) {
-    requestsView.style.display = target === 'requests' ? 'block' : 'none';
-    servicesView.style.display = target === 'services' ? 'block' : 'none';
-    detailView.style.display = target === 'detail' ? 'block' : 'none';
-
-    document.querySelectorAll('.nav-item').forEach((item) => {
-      item.classList.toggle('active', item.dataset.view === target);
-    });
+  function statusClass(status) {
+    const value = String(status || '').toLowerCase();
+    if (value.includes('gözləm') || value.includes('pending')) return 'status-yeni';
+    if (value.includes('qiym') || value.includes('quote')) return 'status-qiymetlendirildi';
+    if (value.includes('hazır')) return 'status-hazir';
+    if (value.includes('icra')) return 'status-icrada';
+    if (value.includes('təhvil') || value.includes('teslim')) return 'status-teslim';
+    return 'status-baxilir';
   }
 
   function formatDateTime(value) {
@@ -31,20 +35,47 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
   }
 
-  async function checkAuth() {
-    const response = await fetch('/api/admin/me');
-    const data = await response.json();
+  function showView(target) {
+    if (requestsView) requestsView.style.display = target === 'requests' ? 'block' : 'none';
+    if (servicesView) servicesView.style.display = target === 'services' ? 'block' : 'none';
+    if (detailView) detailView.style.display = target === 'detail' ? 'block' : 'none';
 
-    if (data.loggedIn) {
-      loginView.style.display = 'none';
-      adminView.style.display = 'grid';
-      adminUser.textContent = `İstifadəçi: ${data.username}`;
-      showView('requests');
-      loadRequests();
-      loadServices();
-    } else {
-      loginView.style.display = 'grid';
-      adminView.style.display = 'none';
+    document.querySelectorAll('.nav-item').forEach((item) => {
+      item.classList.toggle('active', item.dataset.view === target);
+    });
+  }
+
+  function updateStats(requests) {
+    if (!Array.isArray(requests)) return;
+    const count = requests.length;
+    const pending = requests.filter((request) => String(request.status || '').includes('Gözləmədə')).length;
+    const inwork = requests.filter((request) => String(request.status || '').includes('İcrada')).length;
+    const ready = requests.filter((request) => String(request.status || '').includes('Hazırdır')).length;
+
+    if (statTotal) statTotal.textContent = String(count);
+    if (statPending) statPending.textContent = String(pending);
+    if (statInWork) statInWork.textContent = String(inwork);
+    if (statReady) statReady.textContent = String(ready);
+  }
+
+  async function checkAuth() {
+    try {
+      const response = await fetch('/api/admin/me');
+      const data = await response.json();
+
+      if (data.loggedIn) {
+        if (loginView) loginView.style.display = 'none';
+        if (adminView) adminView.style.display = 'grid';
+        if (adminUser) adminUser.textContent = `İstifadəçi: ${data.username}`;
+        showView('requests');
+        await loadRequests();
+        await loadServices();
+      } else {
+        if (loginView) loginView.style.display = 'flex';
+        if (adminView) adminView.style.display = 'none';
+      }
+    } catch (error) {
+      console.error('checkAuth error:', error);
     }
   }
 
@@ -55,21 +86,33 @@ document.addEventListener('DOMContentLoaded', () => {
       password: document.getElementById('password').value
     };
 
-    const response = await fetch('/api/admin/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    try {
+      const response = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
 
-    const body = await response.json();
-    if (!response.ok) {
-      loginMessage.textContent = body.error || 'Giriş alınmadı.';
-      loginMessage.style.color = '#ffb0b0';
-      return;
+      const body = await response.json();
+      if (!response.ok) {
+        if (loginMessage) {
+          loginMessage.textContent = body.error || 'Giriş alınmadı.';
+          loginMessage.style.color = '#ffb0b0';
+        }
+        return;
+      }
+
+      if (loginMessage) {
+        loginMessage.textContent = '';
+      }
+      await checkAuth();
+    } catch (error) {
+      console.error('login error:', error);
+      if (loginMessage) {
+        loginMessage.textContent = 'Server ilə əlaqə qurula bilmədi.';
+        loginMessage.style.color = '#ffb0b0';
+      }
     }
-
-    loginMessage.textContent = '';
-    await checkAuth();
   });
 
   document.getElementById('logout-btn')?.addEventListener('click', async () => {
@@ -78,53 +121,64 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.querySelectorAll('.nav-item').forEach((item) => {
-    item.addEventListener('click', (event) => {
+    item.addEventListener('click', async (event) => {
       event.preventDefault();
       const view = item.dataset.view;
       showView(view);
-      if (view === 'requests') loadRequests();
-      if (view === 'services') loadServices();
+      if (view === 'requests') await loadRequests();
+      if (view === 'services') await loadServices();
     });
   });
 
   async function loadRequests() {
-    const response = await fetch('/api/admin/requests');
-    const requests = await response.json();
+    try {
+      const response = await fetch('/api/admin/requests');
+      const requests = await response.json();
+      updateStats(requests || []);
 
-    requestsTable.innerHTML = (requests || []).map((request) => `
-      <tr data-id="${request.id}" style="cursor:pointer;">
-        <td>${request.tracking_code}</td>
-        <td>${request.customer_name}</td>
-        <td>${request.customer_phone}</td>
-        <td>${request.service_name}</td>
-        <td>${formatDateTime(request.created_at)}</td>
-        <td><span class="status-badge">${request.status}</span></td>
-        <td>${Number(request.final_price || request.quoted_price || 0).toFixed(2)} ₼</td>
-      </tr>
-    `).join('');
+      if (!requestsTable) return;
+      requestsTable.innerHTML = (requests || []).map((request) => `
+        <tr data-id="${request.id}" style="cursor:pointer;">
+          <td>${request.tracking_code}</td>
+          <td>${request.customer_name}</td>
+          <td>${request.customer_phone}</td>
+          <td>${request.service_name}</td>
+          <td>${formatDateTime(request.created_at)}</td>
+          <td><span class="status-badge ${statusClass(request.status)}">${request.status}</span></td>
+          <td>${Number(request.final_price || request.quoted_price || 0).toFixed(2)} ₼</td>
+        </tr>
+      `).join('');
 
-    requestsTable.querySelectorAll('tr[data-id]').forEach((row) => {
-      row.addEventListener('click', () => openRequestDetail(Number(row.dataset.id)));
-    });
+      requestsTable.querySelectorAll('tr[data-id]').forEach((row) => {
+        row.addEventListener('click', () => openRequestDetail(Number(row.dataset.id)));
+      });
+    } catch (error) {
+      console.error('loadRequests error:', error);
+    }
   }
 
   async function openRequestDetail(id) {
     selectedRequestId = id;
-    const response = await fetch(`/api/admin/requests/${id}`);
-    const body = await response.json();
-    const request = body.request;
 
-    document.getElementById('detail-code').value = request.tracking_code;
-    document.getElementById('detail-name').value = request.customer_name;
-    document.getElementById('detail-phone').value = request.customer_phone;
-    document.getElementById('detail-device').value = request.device_info || '-';
-    document.getElementById('detail-service').value = request.service_name || '-';
-    document.getElementById('detail-created').value = formatDateTime(request.created_at);
-    document.getElementById('detail-status').value = request.status || 'Gözləmədə';
-    document.getElementById('detail-quoted').value = Number(request.quoted_price || 0);
-    document.getElementById('detail-final').value = Number(request.final_price || 0);
+    try {
+      const response = await fetch(`/api/admin/requests/${id}`);
+      const body = await response.json();
+      const request = body.request;
 
-    showView('detail');
+      document.getElementById('detail-code').value = request.tracking_code;
+      document.getElementById('detail-name').value = request.customer_name;
+      document.getElementById('detail-phone').value = request.customer_phone;
+      document.getElementById('detail-device').value = request.device_info || '-';
+      document.getElementById('detail-service').value = request.service_name || '-';
+      document.getElementById('detail-created').value = formatDateTime(request.created_at);
+      document.getElementById('detail-status').value = request.status || 'Gözləmədə';
+      document.getElementById('detail-quoted').value = Number(request.quoted_price || 0);
+      document.getElementById('detail-final').value = Number(request.final_price || 0);
+
+      showView('detail');
+    } catch (error) {
+      console.error('openRequestDetail error:', error);
+    }
   }
 
   document.getElementById('save-request-btn')?.addEventListener('click', async () => {
@@ -136,54 +190,79 @@ document.addEventListener('DOMContentLoaded', () => {
       final_price: document.getElementById('detail-final').value
     };
 
-    const response = await fetch(`/api/admin/requests/${selectedRequestId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    try {
+      const response = await fetch(`/api/admin/requests/${selectedRequestId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
 
-    const body = await response.json();
-    if (!response.ok) {
-      alert(body.error || 'Yeniləmə uğursuz oldu.');
-      return;
+      const body = await response.json();
+      if (!response.ok) {
+        alert(body.error || 'Yeniləmə uğursuz oldu.');
+        return;
+      }
+
+      await loadRequests();
+      await openRequestDetail(selectedRequestId);
+      alert('Müraciət yeniləndi.');
+    } catch (error) {
+      console.error('saveRequest error:', error);
+      alert('Müraciət yenilənə bilmədi.');
     }
-
-    await loadRequests();
-    alert('Müraciət yeniləndi.');
   });
 
-  document.getElementById('back-to-list-btn')?.addEventListener('click', () => {
+  document.getElementById('back-to-list-btn')?.addEventListener('click', async () => {
     showView('requests');
-    loadRequests();
+    await loadRequests();
   });
 
   async function loadServices() {
-    const response = await fetch('/api/admin/services', { headers: { 'Content-Type': 'application/json' } });
-    const services = await response.json();
-    servicesTable.innerHTML = (services || []).map((service) => `
-      <tr>
-        <td>${service.name}</td>
-        <td>${service.category}</td>
-        <td>${formatDateTime(service.created_at)}</td>
-        <td><button class="danger" data-delete-service="${service.id}">Sil</button></td>
-      </tr>
-    `).join('');
+    try {
+      const response = await fetch('/api/admin/services', { headers: { 'Content-Type': 'application/json' } });
+      const services = await response.json();
 
-    servicesTable.querySelectorAll('[data-delete-service]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        const id = Number(button.dataset.deleteService);
-        await fetch(`/api/admin/services/${id}`, { method: 'DELETE' });
-        await loadServices();
+      if (!servicesTable) return;
+      servicesTable.innerHTML = (services || []).map((service) => `
+        <tr>
+          <td>${service.name}</td>
+          <td>${service.category}</td>
+          <td>${formatDateTime(service.created_at)}</td>
+          <td><button class="btn btn-danger btn-sm" data-delete-service="${service.id}">Sil</button></td>
+        </tr>
+      `).join('');
+
+      servicesTable.querySelectorAll('[data-delete-service]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const id = Number(button.dataset.deleteService);
+          await fetch(`/api/admin/services/${id}`, { method: 'DELETE' });
+          await loadServices();
+        });
       });
-    });
+    } catch (error) {
+      console.error('loadServices error:', error);
+    }
   }
 
   document.getElementById('add-service-btn')?.addEventListener('click', () => {
-    serviceModal.style.display = 'grid';
+    if (serviceModal) {
+      serviceModal.classList.add('open');
+      serviceModal.setAttribute('aria-hidden', 'false');
+    }
   });
 
   document.getElementById('close-service-modal')?.addEventListener('click', () => {
-    serviceModal.style.display = 'none';
+    if (serviceModal) {
+      serviceModal.classList.remove('open');
+      serviceModal.setAttribute('aria-hidden', 'true');
+    }
+  });
+
+  serviceModal?.addEventListener('click', (event) => {
+    if (event.target === serviceModal) {
+      serviceModal.classList.remove('open');
+      serviceModal.setAttribute('aria-hidden', 'true');
+    }
   });
 
   document.getElementById('service-form')?.addEventListener('submit', async (event) => {
@@ -193,25 +272,31 @@ document.addEventListener('DOMContentLoaded', () => {
       category: document.getElementById('service-category').value.trim() || 'Genel'
     };
 
-    if (!payload.name) {
-      return;
+    if (!payload.name) return;
+
+    try {
+      const response = await fetch('/api/admin/services', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const body = await response.json();
+      if (!response.ok) {
+        alert(body.error || 'Xidmət əlavə edilə bilmədi.');
+        return;
+      }
+
+      if (serviceModal) {
+        serviceModal.classList.remove('open');
+        serviceModal.setAttribute('aria-hidden', 'true');
+      }
+      document.getElementById('service-form').reset();
+      await loadServices();
+    } catch (error) {
+      console.error('addService error:', error);
+      alert('Xidmət əlavə edilə bilmədi.');
     }
-
-    const response = await fetch('/api/admin/services', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    const body = await response.json();
-    if (!response.ok) {
-      alert(body.error || 'Xidmət əlavə edilə bilmədi.');
-      return;
-    }
-
-    serviceModal.style.display = 'none';
-    document.getElementById('service-form').reset();
-    await loadServices();
   });
 
   checkAuth();
