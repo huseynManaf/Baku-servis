@@ -212,7 +212,8 @@
     renderDetailChat(fresh.messages);
   }
 
-  saveButton.addEventListener('click', async () => {
+  saveButton.addEventListener('click', async (e) => {
+    e.preventDefault();
     const currentStatus = statusSelect ? statusSelect.value : '';
     const currentQuotedPrice = quotedPriceInput ? quotedPriceInput.value : '';
     const currentFinalPrice = finalPriceInput ? finalPriceInput.value : '';
@@ -231,7 +232,7 @@
       body: JSON.stringify(payload)
     });
     const result = await response.json();
-    const updated = result && result.request ? result.request : result;
+    const updated = result && result.updated ? result.updated : result;
     console.log('Save response:', result);
 
     if (statusSelect) statusSelect.value = updated && updated.status ? updated.status : currentStatus;

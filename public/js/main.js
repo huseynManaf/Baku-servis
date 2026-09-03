@@ -385,7 +385,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   function renderTrackResult(data) {
-    console.log('--> TRACKING DATA RECEIVED IN FRONTEND:', data);
+    console.log('TRACKING RESPONSE:', data);
     const request = data && data.request ? data.request : data;
     if (!request) return;
 
@@ -396,20 +396,20 @@ document.addEventListener('DOMContentLoaded', function () {
     const statusValue = String(request.status || 'yeni').trim();
     const chip = el('#tr-status');
     chip.className = 'status-chip status-' + statusValue;
-    chip.textContent = statusValue;
+    chip.textContent = data.status || request.status || statusValue;
 
-    const finalPrice = request.final_price ?? request.finalPrice;
-    const quotedPrice = request.quoted_price ?? request.quotedPrice;
-    const displayPrice = (finalPrice && finalPrice > 0) ? finalPrice : quotedPrice;
+    const finalPrice = data.final_price || data.finalPrice;
+    const quotedPrice = data.quoted_price || data.quotedPrice;
+    const displayPrice = finalPrice || quotedPrice;
 
-    if (displayPrice && displayPrice > 0) {
+    if (displayPrice && Number(displayPrice) > 0) {
       el('#tr-price').textContent = `${displayPrice} ₼`;
     } else {
       el('#tr-price').textContent = 'Qiymət gözlənilir';
     }
 
     const payBtn = el('#pay-btn');
-    if (displayPrice && displayPrice > 0 && !request.is_paid) {
+    if (displayPrice && Number(displayPrice) > 0 && !request.is_paid) {
       payBtn.style.display = 'inline-flex';
       payBtn.onclick = async () => {
         payBtn.disabled = true; payBtn.textContent = 'Ödəniş edilir...';
