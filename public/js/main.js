@@ -23,6 +23,8 @@
   const cardNumberInput = document.getElementById('card-number');
   const cardExpiryInput = document.getElementById('card-expiry');
   const cardCvcInput = document.getElementById('card-cvc');
+  const cardBrandBadge = document.getElementById('card-brand-badge');
+  const themeToggle = document.getElementById('theme-toggle');
   let activeTrackingId = null;
 
   const onsiteToggle = document.getElementById('is_onsite');
@@ -60,10 +62,102 @@
     return 'status-baxilir';
   }
 
+  function applyTheme(theme) {
+    const root = document.body;
+    const resolved = theme === 'light' ? 'theme-light' : '';
+    root.classList.toggle('theme-light', resolved === 'theme-light');
+    if (themeToggle) themeToggle.textContent = theme === 'light' ? 'Dark' : 'Light';
+    localStorage.setItem('hugu-theme', theme);
+  }
+
+  function showToast(message, type = 'error') {
+    const container = document.getElementById('toast-container');
+    if (!container) {
+      alert(message);
+      return;
+    }
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${type === 'success' ? 'toast-ok' : 'toast-err'} visible`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.classList.remove('visible');
+      setTimeout(() => toast.remove(), 220);
+    }, 2600);
+  }
+
+  function luhnCheck(cardNumber) {
+    const digits = String(cardNumber || '').replace(/\D/g, '');
+    if (!/^\d{13,19}$/.test(digits)) return false;
+
+    let sum = 0;
+    let shouldDouble = false;
+    for (let i = digits.length - 1; i >= 0; i -= 1) {
+      let digit = Number(digits[i]);
+      if (shouldDouble) {
+        digit *= 2;
+        if (digit > 9) digit -= 9;
+      }
+      sum += digit;
+      shouldDouble = !shouldDouble;
+    }
+
+    return sum % 10 === 0;
+  }
+
+  function detectCardBrand(cardNumber) {
+    const digits = String(cardNumber || '').replace(/\D/g, '');
+    if (!digits) return { brand: 'Lokal Kart', accent: '#7dd3fc' };
+    if (/^4/.test(digits)) return { brand: 'Visa', accent: '#1a73e8' };
+    if (/^(5[1-5]|2(2[2-9]|[3-6]\d|7[0-1]))/.test(digits)) return { brand: 'Mastercard', accent: '#f59e0b' };
+    return { brand: 'Lokal Kart', accent: '#34d399' };
+  }
+
+  function validatePaymentDetails() {
+    const cardNumber = cardNumberInput.value.trim();
+    const expiry = cardExpiryInput.value.trim();
+    const cvc = cardCvcInput.value.trim();
+
+    if (!/^\d{13,19}$/.test(cardNumber.replace(/\D/g, ''))) {
+      showToast('Kart nömrəsi 13-19 rəqəm olmalıdır.');
+      return false;
+    }
+
+    if (!luhnCheck(cardNumber)) {
+      showToast('Kart nömrəsi etibarsızdır.');
+      return false;
+    }
+
+    const expiryMatch = /^(0[1-9]|1[0-2])\/(\d{2})$/.exec(expiry);
+    if (!expiryMatch) {
+      showToast('Kartın bitmə tarixi formatı düzgün deyil. Məsələn: 12/30');
+      return false;
+    }
+
+    const month = Number(expiryMatch[1]);
+    const shortYear = Number(expiryMatch[2]);
+    const fullYear = 2000 + shortYear;
+    const expiryDate = new Date(fullYear, month, 0, 23, 59, 59, 999);
+    const now = new Date();
+
+    if (expiryDate <= now) {
+      showToast('Kartın istifadə müddəti bitib!');
+      return false;
+    }
+
+    if (!/^\d{3,4}$/.test(cvc)) {
+      showToast('CVC/CVV düzgün deyil. 3 və ya 4 rəqəm olmalıdır.');
+      return false;
+    }
+
+    return true;
+  }
+
   function populateServices(services) {
     if (!serviceSelect) return;
     serviceSelect.innerHTML = '<option value="">Seçin</option>' + (services || []).map((service) => (
-      `<option value="${service.name}">${service.name}</option>`
+      `<option value="${service.name}">${service.name}${Number(service.price || 0) > 0 ? ` — ${Number(service.price).toFixed(2)} ₼` : ''}</option>`
     )).join('');
   }
 
@@ -80,8 +174,8 @@
         <h3>${service.name}</h3>
         <p>Peşəkar texniki yardım, dəqiq qiymətləndirmə və sürətli status izləmə.</p>
         <div class="svc-price-row">
-          <span class="svc-price">₼</span>
-          <span class="svc-price-old">Qiymət</span>
+          <span class="svc-price">${Number(service.price || 0).toFixed(2)} ₼</span>
+          <span class="svc-price-old">Başlanğıc qiymət</span>
         </div>
         <button type="button" class="btn btn-primary btn-sm svc-pick" data-service-name="${service.name}">Seç</button>
       </article>
@@ -210,9 +304,22 @@
     if (event.target === paymentModal) closePaymentModalFn();
   });
 
+  cardNumberInput?.addEventListener('input', () => {
+    const digits = cardNumberInput.value.replace(/\D/g, '');
+    const brand = detectCardBrand(digits);
+    if (cardBrandBadge) {
+      cardBrandBadge.textContent = brand.brand;
+      cardBrandBadge.style.background = brand.accent;
+      cardBrandBadge.style.color = '#081018';
+    }
+    cardNumberInput.value = digits.replace(/(.{4})/g, '$1 ').trim();
+  });
+
   paymentForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (!activeTrackingId) return;
+
+    if (!validatePaymentDetails()) return;
 
     const payload = {
       card_number: cardNumberInput.value.trim(),
@@ -229,16 +336,16 @@
 
       const body = await response.json();
       if (!response.ok) {
-        alert(body.error || 'Ödəniş işlənə bilmədi.');
+        showToast(body.error || 'Ödəniş işlənə bilmədi.', 'error');
         return;
       }
 
       closePaymentModalFn();
-      alert('Ödəniş uğurla tamamlandı.');
+      showToast('Ödəniş uğurla tamamlandı.', 'success');
       trackForm.dispatchEvent(new Event('submit'));
     } catch (error) {
       console.error('payment error:', error);
-      alert('Ödəniş zamanı xəta baş verdi.');
+      showToast('Ödəniş zamanı xəta baş verdi.', 'error');
     }
   });
 
@@ -405,6 +512,13 @@
     setInterval(loadChatHistory, 4000);
     loadChatHistory();
   }
+
+  const savedTheme = localStorage.getItem('hugu-theme') || 'dark';
+  applyTheme(savedTheme);
+  themeToggle?.addEventListener('click', () => {
+    const nextTheme = document.body.classList.contains('theme-light') ? 'dark' : 'light';
+    applyTheme(nextTheme);
+  });
 
   setupOnsiteMap();
   initCustomerChat();

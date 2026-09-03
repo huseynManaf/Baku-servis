@@ -81,6 +81,7 @@ async function ensureDatabase() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL UNIQUE,
       category TEXT NOT NULL DEFAULT 'Genel',
+      price REAL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
@@ -129,6 +130,11 @@ async function ensureDatabase() {
       };
       await run(`ALTER TABLE requests ADD COLUMN ${column} ${typeMap[column]}`);
     }
+  }
+
+  const serviceColumns = new Set((await all('PRAGMA table_info(services)')).map((col) => col.name));
+  if (!serviceColumns.has('price')) {
+    await run('ALTER TABLE services ADD COLUMN price REAL DEFAULT 0');
   }
 
   const admin = await get('SELECT id FROM admins WHERE username = ?', [ADMIN_USERNAME]);
@@ -191,7 +197,10 @@ app.get('/admin', (req, res) => {
 app.get('/api/services', async (req, res) => {
   try {
     const rows = await all('SELECT * FROM services ORDER BY created_at DESC');
-    return res.json(rows);
+    return res.json(rows.map((row) => ({
+      ...row,
+      price: Number(row.price || 0)
+    })));
   } catch (error) {
     console.error('GET /api/services error:', error);
     return res.status(500).json({ error: 'Xidmətlər yüklənə bilmədi.' });
@@ -202,6 +211,7 @@ app.post('/api/admin/services', requireAdmin, async (req, res) => {
   try {
     const name = String(req.body.name || '').trim();
     const category = String(req.body.category || '').trim() || 'Genel';
+    const price = Number(req.body.price || 0);
 
     if (!name) {
       return res.status(400).json({ error: 'Xidmət adı tələb olunur.' });
@@ -212,7 +222,7 @@ app.post('/api/admin/services', requireAdmin, async (req, res) => {
       return res.status(409).json({ error: 'Bu xidmət artıq mövcuddur.' });
     }
 
-    const info = await run('INSERT INTO services (name, category, created_at) VALUES (?, ?, ?)', [name, category, nowIso()]);
+    const info = await run('INSERT INTO services (name, category, price, created_at) VALUES (?, ?, ?, ?)', [name, category, Number.isFinite(price) ? price : 0, nowIso()]);
     const row = await get('SELECT * FROM services WHERE id = ?', [info.lastInsertRowid]);
     return res.status(201).json({ ok: true, service: row });
   } catch (error) {
@@ -224,10 +234,33 @@ app.post('/api/admin/services', requireAdmin, async (req, res) => {
 app.get('/api/admin/services', requireAdmin, async (req, res) => {
   try {
     const rows = await all('SELECT * FROM services ORDER BY created_at DESC');
-    return res.json(rows);
+    return res.json(rows.map((row) => ({
+      ...row,
+      price: Number(row.price || 0)
+    })));
   } catch (error) {
     console.error('GET /api/admin/services error:', error);
     return res.status(500).json({ error: 'Xidmətlər yüklənə bilmədi.' });
+  }
+});
+
+app.put('/api/admin/services/:id', requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const name = String(req.body.name || '').trim();
+    const category = String(req.body.category || '').trim() || 'Genel';
+    const price = Number(req.body.price || 0);
+
+    if (!name) {
+      return res.status(400).json({ error: 'Xidmət adı tələb olunur.' });
+    }
+
+    await run('UPDATE services SET name = ?, category = ?, price = ? WHERE id = ?', [name, category, Number.isFinite(price) ? price : 0, id]);
+    const row = await get('SELECT * FROM services WHERE id = ?', [id]);
+    return res.json({ ok: true, service: row });
+  } catch (error) {
+    console.error('PUT /api/admin/services/:id error:', error);
+    return res.status(500).json({ error: 'Xidmət yenilənə bilmədi.' });
   }
 });
 

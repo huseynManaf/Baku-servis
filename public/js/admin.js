@@ -41,6 +41,11 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
   }
 
+  function formatPrice(value) {
+    const number = Number(value || 0);
+    return `${number.toFixed(2)} ₼`;
+  }
+
   function showView(target) {
     if (requestsView) requestsView.style.display = target === 'requests' ? 'block' : 'none';
     if (servicesView) servicesView.style.display = target === 'services' ? 'block' : 'none';
@@ -247,6 +252,47 @@ document.addEventListener('DOMContentLoaded', () => {
     await loadRequests();
   });
 
+  function openServiceModal(service = null) {
+    const serviceNameInput = document.getElementById('service-name');
+    const serviceCategoryInput = document.getElementById('service-category');
+    const servicePriceInput = document.getElementById('service-price');
+    const serviceSubmitBtn = document.getElementById('service-submit-btn');
+    const serviceIdHidden = document.getElementById('service-id');
+
+    if (!serviceModal) return;
+
+    if (service) {
+      serviceNameInput.value = service.name || '';
+      serviceCategoryInput.value = service.category || '';
+      servicePriceInput.value = Number(service.price || 0);
+      serviceSubmitBtn.textContent = 'Yadda saxla';
+      if (!serviceIdHidden) {
+        const hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.id = 'service-id';
+        document.getElementById('service-form').appendChild(hidden);
+      }
+      document.getElementById('service-id').value = String(service.id);
+    } else {
+      document.getElementById('service-form').reset();
+      if (serviceIdHidden) serviceIdHidden.remove();
+      serviceSubmitBtn.textContent = 'Əlavə et';
+    }
+
+    serviceModal.classList.add('open');
+    serviceModal.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeServiceModal() {
+    if (!serviceModal) return;
+    serviceModal.classList.remove('open');
+    serviceModal.setAttribute('aria-hidden', 'true');
+    const serviceForm = document.getElementById('service-form');
+    if (serviceForm) serviceForm.reset();
+    const serviceIdHidden = document.getElementById('service-id');
+    if (serviceIdHidden) serviceIdHidden.remove();
+  }
+
   async function loadServices() {
     try {
       const response = await fetch('/api/admin/services', { headers: { 'Content-Type': 'application/json' } });
@@ -257,10 +303,24 @@ document.addEventListener('DOMContentLoaded', () => {
         <tr>
           <td>${service.name}</td>
           <td>${service.category}</td>
+          <td>${formatPrice(service.price)}</td>
           <td>${formatDateTime(service.created_at)}</td>
-          <td><button class="btn btn-danger btn-sm" data-delete-service="${service.id}">Sil</button></td>
+          <td>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-outline btn-sm" data-edit-service="${service.id}">Redaktə</button>
+              <button class="btn btn-danger btn-sm" data-delete-service="${service.id}">Sil</button>
+            </div>
+          </td>
         </tr>
       `).join('');
+
+      servicesTable.querySelectorAll('[data-edit-service]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const id = Number(button.dataset.editService);
+          const service = (services || []).find((item) => Number(item.id) === id);
+          if (service) openServiceModal(service);
+        });
+      });
 
       servicesTable.querySelectorAll('[data-delete-service]').forEach((button) => {
         button.addEventListener('click', async () => {
@@ -351,58 +411,43 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  document.getElementById('add-service-btn')?.addEventListener('click', () => {
-    if (serviceModal) {
-      serviceModal.classList.add('open');
-      serviceModal.setAttribute('aria-hidden', 'false');
-    }
-  });
+  document.getElementById('add-service-btn')?.addEventListener('click', () => openServiceModal());
 
-  document.getElementById('close-service-modal')?.addEventListener('click', () => {
-    if (serviceModal) {
-      serviceModal.classList.remove('open');
-      serviceModal.setAttribute('aria-hidden', 'true');
-    }
-  });
+  document.getElementById('close-service-modal')?.addEventListener('click', closeServiceModal);
 
   serviceModal?.addEventListener('click', (event) => {
-    if (event.target === serviceModal) {
-      serviceModal.classList.remove('open');
-      serviceModal.setAttribute('aria-hidden', 'true');
-    }
+    if (event.target === serviceModal) closeServiceModal();
   });
 
   document.getElementById('service-form')?.addEventListener('submit', async (event) => {
     event.preventDefault();
+    const id = document.getElementById('service-id');
     const payload = {
       name: document.getElementById('service-name').value.trim(),
-      category: document.getElementById('service-category').value.trim() || 'Genel'
+      category: document.getElementById('service-category').value.trim() || 'Genel',
+      price: Number(document.getElementById('service-price').value || 0)
     };
 
     if (!payload.name) return;
 
     try {
-      const response = await fetch('/api/admin/services', {
-        method: 'POST',
+      const response = await fetch(id ? `/api/admin/services/${id.value}` : '/api/admin/services', {
+        method: id ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
       const body = await response.json();
       if (!response.ok) {
-        alert(body.error || 'Xidmət əlavə edilə bilmədi.');
+        alert(body.error || 'Xidmət yadda saxlanıla bilmədi.');
         return;
       }
 
-      if (serviceModal) {
-        serviceModal.classList.remove('open');
-        serviceModal.setAttribute('aria-hidden', 'true');
-      }
-      document.getElementById('service-form').reset();
+      closeServiceModal();
       await loadServices();
     } catch (error) {
-      console.error('addService error:', error);
-      alert('Xidmət əlavə edilə bilmədi.');
+      console.error('saveService error:', error);
+      alert('Xidmət yadda saxlanıla bilmədi.');
     }
   });
 

@@ -48,6 +48,7 @@
 
         <div class="nav-cta">
           <a href="tel:+994707164142" class="tel-badge">+994 70 716 41 42</a>
+          <button type="button" class="btn btn-outline btn-sm theme-toggle" id="theme-toggle" aria-label="Tema dəyişdir">Light</button>
           <a href="/admin" class="btn btn-outline btn-sm">Admin</a>
         </div>
       </div>
@@ -271,10 +272,15 @@
     </footer>
 
     <div id="payment-modal" class="modal-overlay" aria-hidden="true">
-      <div class="modal">
+      <div class="modal payment-modal-panel">
         <div class="modal-head">
           <h3>Onlayn Ödəniş</h3>
           <button type="button" class="btn btn-ghost" id="close-payment-modal">X</button>
+        </div>
+
+        <div class="card-brand-row">
+          <span class="card-chip"></span>
+          <span id="card-brand-badge" class="card-brand-badge">Lokal Kart</span>
         </div>
 
         <form id="payment-form">
@@ -310,6 +316,7 @@
       </div>
     </div>
 
+    <div id="toast-container" aria-live="polite"></div>
     <a href="https://wa.me/994707164142?text=Salam%2C%20Hugu%20Servis%20xidmətləri%20ilə%20bağlı%20məlumat%20almaq%20istəyirəm." target="_blank" rel="noopener" class="whatsapp-fab" aria-label="WhatsApp">WA</a>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script src="js/main.js"></script>
