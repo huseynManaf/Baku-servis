@@ -8,14 +8,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const servicesTable = document.getElementById('services-table');
   const requestsView = document.getElementById('requests-view');
   const servicesView = document.getElementById('services-view');
+  const chatsView = document.getElementById('chats-view');
   const detailView = document.getElementById('detail-view');
   const serviceModal = document.getElementById('service-modal');
   const statTotal = document.getElementById('stat-total');
   const statPending = document.getElementById('stat-pending');
   const statInWork = document.getElementById('stat-inwork');
   const statReady = document.getElementById('stat-ready');
+  const adminChatList = document.getElementById('admin-chat-list');
+  const adminChatMessages = document.getElementById('admin-chat-messages');
+  const adminChatInput = document.getElementById('admin-chat-input');
+  const adminChatSend = document.getElementById('admin-chat-send');
 
   let selectedRequestId = null;
+  let currentChatSession = null;
 
   function statusClass(status) {
     const value = String(status || '').toLowerCase();
@@ -38,6 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function showView(target) {
     if (requestsView) requestsView.style.display = target === 'requests' ? 'block' : 'none';
     if (servicesView) servicesView.style.display = target === 'services' ? 'block' : 'none';
+    if (chatsView) chatsView.style.display = target === 'chats' ? 'block' : 'none';
     if (detailView) detailView.style.display = target === 'detail' ? 'block' : 'none';
 
     document.querySelectorAll('.nav-item').forEach((item) => {
@@ -70,6 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showView('requests');
         await loadRequests();
         await loadServices();
+        await loadAdminChats();
       } else {
         if (loginView) loginView.style.display = 'flex';
         if (adminView) adminView.style.display = 'none';
@@ -127,6 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
       showView(view);
       if (view === 'requests') await loadRequests();
       if (view === 'services') await loadServices();
+      if (view === 'chats') await loadAdminChats();
     });
   });
 
@@ -145,6 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <td>${request.service_name}</td>
           <td>${formatDateTime(request.created_at)}</td>
           <td><span class="status-badge ${statusClass(request.status)}">${request.status}</span></td>
+          <td><span class="status-badge ${request.payment_status === 'Ödənilib' ? 'status-hazir' : 'status-yeni'}">${request.payment_status || 'Ödənilməyib'}</span></td>
           <td>${Number(request.final_price || request.quoted_price || 0).toFixed(2)} ₼</td>
         </tr>
       `).join('');
@@ -174,6 +184,25 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('detail-status').value = request.status || 'Gözləmədə';
       document.getElementById('detail-quoted').value = Number(request.quoted_price || 0);
       document.getElementById('detail-final').value = Number(request.final_price || 0);
+      document.getElementById('detail-payment-status').value = request.payment_status || 'Ödənilməyib';
+
+      const detailOnsiteBox = document.getElementById('detail-onsite-box');
+      const detailAddress = document.getElementById('detail-address');
+      const detailMapLink = document.getElementById('detail-map-link');
+      const isOnsite = Boolean(request.is_onsite);
+
+      if (isOnsite && (request.address || request.latitude != null || request.longitude != null)) {
+        detailOnsiteBox.style.display = 'block';
+        detailAddress.value = request.address || `${request.latitude}, ${request.longitude}`;
+        if (request.latitude != null && request.longitude != null) {
+          detailMapLink.href = `https://www.google.com/maps?q=${request.latitude},${request.longitude}`;
+          detailMapLink.style.display = 'inline-flex';
+        } else {
+          detailMapLink.style.display = 'none';
+        }
+      } else {
+        detailOnsiteBox.style.display = 'none';
+      }
 
       showView('detail');
     } catch (error) {
@@ -187,7 +216,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const payload = {
       status: document.getElementById('detail-status').value,
       quoted_price: document.getElementById('detail-quoted').value,
-      final_price: document.getElementById('detail-final').value
+      final_price: document.getElementById('detail-final').value,
+      payment_status: document.getElementById('detail-payment-status').value
     };
 
     try {
@@ -244,6 +274,83 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  async function loadAdminChats() {
+    try {
+      const response = await fetch('/api/admin/chats');
+      const data = await response.json();
+      const chats = data.chats || [];
+
+      if (!adminChatList) return;
+      adminChatList.innerHTML = chats.length ? chats.map((chat) => `
+        <div class="admin-chat-item ${currentChatSession === chat.session_id ? 'active' : ''}" data-session-id="${chat.session_id}">
+          <strong>${chat.customer_name}</strong>
+          <div>${chat.last_message || 'Mesaj yoxdur'}</div>
+          <small>${chat.unread_count ? `${chat.unread_count} oxunmamış` : 'Oxunmuş'} · ${formatDateTime(chat.last_message_at)}</small>
+        </div>
+      `).join('') : '<div class="small">Aktiv chat yoxdur.</div>';
+
+      adminChatList.querySelectorAll('.admin-chat-item').forEach((item) => {
+        item.addEventListener('click', async () => {
+          const sessionId = item.dataset.sessionId;
+          currentChatSession = sessionId;
+          await openChat(sessionId);
+          await loadAdminChats();
+        });
+      });
+
+      if (!currentChatSession && chats.length) {
+        currentChatSession = chats[0].session_id;
+        await openChat(currentChatSession);
+      }
+    } catch (error) {
+      console.error('loadAdminChats error:', error);
+    }
+  }
+
+  async function openChat(sessionId) {
+    if (!sessionId) return;
+    currentChatSession = sessionId;
+    try {
+      const response = await fetch(`/api/chat/history/${encodeURIComponent(sessionId)}`);
+      const data = await response.json();
+      const messages = data.messages || [];
+
+      if (!adminChatMessages) return;
+      adminChatMessages.innerHTML = messages.map((msg) => `
+        <div class="bubble ${msg.sender_type === 'customer' ? 'customer' : 'admin'}">${msg.message}</div>
+      `).join('');
+      adminChatMessages.scrollTop = adminChatMessages.scrollHeight;
+    } catch (error) {
+      console.error('openChat error:', error);
+    }
+  }
+
+  adminChatSend?.addEventListener('click', async () => {
+    if (!currentChatSession) return;
+    const message = (adminChatInput?.value || '').trim();
+    if (!message) return;
+    if (adminChatInput) adminChatInput.value = '';
+
+    try {
+      await fetch('/api/chat/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: currentChatSession, sender_type: 'admin', message })
+      });
+      await openChat(currentChatSession);
+      await loadAdminChats();
+    } catch (error) {
+      console.error('admin chat send error:', error);
+    }
+  });
+
+  adminChatInput?.addEventListener('keydown', async (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      adminChatSend?.click();
+    }
+  });
+
   document.getElementById('add-service-btn')?.addEventListener('click', () => {
     if (serviceModal) {
       serviceModal.classList.add('open');
@@ -298,6 +405,15 @@ document.addEventListener('DOMContentLoaded', () => {
       alert('Xidmət əlavə edilə bilmədi.');
     }
   });
+
+  setInterval(async () => {
+    if (document.getElementById('admin-view') && document.getElementById('admin-view').style.display !== 'none') {
+      await loadRequests();
+      if (chatsView && chatsView.style.display !== 'none') {
+        await loadAdminChats();
+      }
+    }
+  }, 5000);
 
   checkAuth();
 });

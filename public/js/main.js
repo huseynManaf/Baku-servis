@@ -12,6 +12,28 @@
   const resultUpdated = document.getElementById('result-updated');
   const resultQuoted = document.getElementById('result-quoted');
   const resultFinal = document.getElementById('result-final');
+  const resultPaymentStatus = document.getElementById('result-payment-status');
+  const resultAddressWrap = document.getElementById('result-address-wrap');
+  const resultAddress = document.getElementById('result-address');
+  const payButtonWrap = document.getElementById('pay-button-wrap');
+  const payButton = document.getElementById('pay-button');
+  const paymentModal = document.getElementById('payment-modal');
+  const closePaymentModal = document.getElementById('close-payment-modal');
+  const paymentForm = document.getElementById('payment-form');
+  const cardNumberInput = document.getElementById('card-number');
+  const cardExpiryInput = document.getElementById('card-expiry');
+  const cardCvcInput = document.getElementById('card-cvc');
+  let activeTrackingId = null;
+
+  const onsiteToggle = document.getElementById('is_onsite');
+  const onsiteMapWrap = document.getElementById('onsite-map-wrap');
+  const onsiteAddressInput = document.getElementById('onsite-address');
+  const onsiteLatInput = document.getElementById('onsite-latitude');
+  const onsiteLngInput = document.getElementById('onsite-longitude');
+  const searchAddressBtn = document.getElementById('search-address-btn');
+
+  let onSiteMap = null;
+  let onSiteMarker = null;
 
   function formatDate(value) {
     if (!value) return '-';
@@ -90,18 +112,158 @@
     }
   }
 
+  function setupOnsiteMap() {
+    if (!document.getElementById('onsite-map')) return;
+    if (typeof L === 'undefined') return;
+
+    if (!onSiteMap) {
+      onSiteMap = L.map('onsite-map', { zoomControl: true }).setView([40.4093, 49.8671], 10);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(onSiteMap);
+
+      onSiteMap.on('click', async (event) => {
+        const { lat, lng } = event.latlng;
+        if (onSiteMarker) {
+          onSiteMarker.setLatLng([lat, lng]);
+        } else {
+          onSiteMarker = L.marker([lat, lng]).addTo(onSiteMap);
+        }
+
+        onsiteLatInput.value = String(lat);
+        onsiteLngInput.value = String(lng);
+
+        try {
+          const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`);
+          const data = await response.json();
+          if (data && data.display_name) {
+            onsiteAddressInput.value = data.display_name;
+          }
+        } catch (error) {
+          console.error('reverse geocode failed:', error);
+        }
+      });
+    }
+
+    onsiteToggle?.addEventListener('change', () => {
+      if (onsiteToggle.checked) {
+        onsiteMapWrap.classList.add('visible');
+      } else {
+        onsiteMapWrap.classList.remove('visible');
+      }
+    });
+
+    searchAddressBtn?.addEventListener('click', async () => {
+      const query = onsiteAddressInput.value.trim();
+      if (!query) {
+        alert('Ünvanı yazın.');
+        return;
+      }
+
+      try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(query)}`);
+        const result = await response.json();
+        if (!result || !result.length) {
+          alert('Ünvan tapılmadı.');
+          return;
+        }
+
+        const place = result[0];
+        const lat = Number(place.lat);
+        const lng = Number(place.lon);
+        onsiteAddressInput.value = place.display_name;
+        onsiteLatInput.value = String(lat);
+        onsiteLngInput.value = String(lng);
+
+        if (onSiteMarker) {
+          onSiteMarker.setLatLng([lat, lng]);
+        } else {
+          onSiteMarker = L.marker([lat, lng]).addTo(onSiteMap);
+        }
+
+        onSiteMap.setView([lat, lng], 14);
+      } catch (error) {
+        console.error('geocode failed:', error);
+        alert('Ünvan axtarışında xəta baş verdi.');
+      }
+    });
+  }
+
+  function openPaymentModal() {
+    if (paymentModal) {
+      paymentModal.classList.add('open');
+      paymentModal.setAttribute('aria-hidden', 'false');
+    }
+  }
+
+  function closePaymentModalFn() {
+    if (paymentModal) {
+      paymentModal.classList.remove('open');
+      paymentModal.setAttribute('aria-hidden', 'true');
+      paymentForm.reset();
+    }
+  }
+
+  closePaymentModal?.addEventListener('click', closePaymentModalFn);
+  paymentModal?.addEventListener('click', (event) => {
+    if (event.target === paymentModal) closePaymentModalFn();
+  });
+
+  paymentForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!activeTrackingId) return;
+
+    const payload = {
+      card_number: cardNumberInput.value.trim(),
+      expiry: cardExpiryInput.value.trim(),
+      cvc: cardCvcInput.value.trim()
+    };
+
+    try {
+      const response = await fetch(`/api/requests/${activeTrackingId}/pay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const body = await response.json();
+      if (!response.ok) {
+        alert(body.error || 'Ödəniş işlənə bilmədi.');
+        return;
+      }
+
+      closePaymentModalFn();
+      alert('Ödəniş uğurla tamamlandı.');
+      trackForm.dispatchEvent(new Event('submit'));
+    } catch (error) {
+      console.error('payment error:', error);
+      alert('Ödəniş zamanı xəta baş verdi.');
+    }
+  });
+
   requestForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
 
+    const isOnsite = Boolean(onsiteToggle && onsiteToggle.checked);
     const payload = {
       customer_name: document.getElementById('customer_name').value.trim(),
       customer_phone: document.getElementById('customer_phone').value.trim(),
       service_name: serviceSelect ? serviceSelect.value : '',
-      device_info: document.getElementById('device_info').value.trim()
+      device_info: document.getElementById('device_info').value.trim(),
+      is_onsite: isOnsite,
+      address: onsiteAddressInput ? onsiteAddressInput.value.trim() : '',
+      latitude: onsiteLatInput ? Number(onsiteLatInput.value || 0) : 0,
+      longitude: onsiteLngInput ? Number(onsiteLngInput.value || 0) : 0
     };
 
     if (!payload.customer_name || !payload.customer_phone || !payload.service_name) {
       setMessage('Ad, telefon və xidmət sahələrini doldurun.', 'error');
+      return;
+    }
+
+    if (isOnsite && (!payload.address || !Number.isFinite(payload.latitude) || !Number.isFinite(payload.longitude))) {
+      setMessage('Səyyar xidmət üçün ünvanı seçin və xəritədə nöqtə qoyun.', 'error');
       return;
     }
 
@@ -119,6 +281,11 @@
       }
 
       requestForm.reset();
+      if (onsiteToggle) onsiteToggle.checked = false;
+      if (onsiteMapWrap) onsiteMapWrap.classList.remove('visible');
+      if (onsiteAddressInput) onsiteAddressInput.value = '';
+      if (onsiteLatInput) onsiteLatInput.value = '';
+      if (onsiteLngInput) onsiteLngInput.value = '';
       setMessage(`Müraciət yarandı. İzləmə kodu: ${body.tracking_code} · ${body.created_at}`, 'success');
     } catch (error) {
       console.error('requestForm error:', error);
@@ -144,6 +311,7 @@
       }
 
       const request = body.request || {};
+      activeTrackingId = request.id || null;
       resultService.textContent = request.service_name || '-';
       resultDevice.textContent = request.device_info || 'Cihaz məlumatı yoxdur';
       resultStatus.textContent = request.status || 'Gözləmədə';
@@ -152,6 +320,21 @@
       resultUpdated.textContent = formatDate(request.updated_at);
       resultQuoted.textContent = `${Number(request.quoted_price || 0).toFixed(2)} ₼`;
       resultFinal.textContent = `${Number(request.final_price || 0).toFixed(2)} ₼`;
+      resultPaymentStatus.textContent = request.payment_status || 'Ödənilməyib';
+
+      if (request.is_onsite && (request.address || request.latitude != null || request.longitude != null)) {
+        resultAddressWrap.style.display = 'block';
+        resultAddress.textContent = request.address || `${request.latitude}, ${request.longitude}`;
+      } else {
+        resultAddressWrap.style.display = 'none';
+      }
+
+      if (Number(request.final_price || 0) > 0 && (request.payment_status || 'Ödənilməyib') !== 'Ödənilib') {
+        payButtonWrap.style.display = 'block';
+      } else {
+        payButtonWrap.style.display = 'none';
+      }
+
       trackingResult.style.display = 'block';
     } catch (error) {
       console.error('trackForm error:', error);
@@ -159,5 +342,71 @@
     }
   });
 
+  payButton?.addEventListener('click', openPaymentModal);
+
+  function initCustomerChat() {
+    const sessionId = localStorage.getItem('hugu-chat-session') || `customer-${Date.now()}`;
+    localStorage.setItem('hugu-chat-session', sessionId);
+
+    const chatToggle = document.getElementById('chat-toggle');
+    const chatPanel = document.getElementById('chat-panel');
+    const chatMessages = document.getElementById('customer-chat-messages');
+    const chatInput = document.getElementById('customer-chat-input');
+    const chatSend = document.getElementById('customer-chat-send');
+    const closeChat = document.getElementById('chat-close');
+
+    async function loadChatHistory() {
+      if (!chatMessages) return;
+      try {
+        const response = await fetch(`/api/chat/history/${encodeURIComponent(sessionId)}`);
+        const data = await response.json();
+        const messages = data.messages || [];
+        chatMessages.innerHTML = messages.map((msg) => `
+          <div class="chat-bubble ${msg.sender_type === 'customer' ? 'customer' : 'admin'}">${msg.message}</div>
+        `).join('');
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      } catch (error) {
+        console.error('loadChatHistory error:', error);
+      }
+    }
+
+    chatToggle?.addEventListener('click', () => {
+      const isVisible = chatPanel && chatPanel.style.display !== 'none';
+      if (chatPanel) chatPanel.style.display = isVisible ? 'none' : 'block';
+    });
+
+    closeChat?.addEventListener('click', () => {
+      if (chatPanel) chatPanel.style.display = 'none';
+    });
+
+    chatSend?.addEventListener('click', async () => {
+      const message = (chatInput?.value || '').trim();
+      if (!message) return;
+      if (chatInput) chatInput.value = '';
+      try {
+        await fetch('/api/chat/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId, sender_type: 'customer', message })
+        });
+        await loadChatHistory();
+      } catch (error) {
+        console.error('customer chat send error:', error);
+      }
+    });
+
+    chatInput?.addEventListener('keydown', async (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        chatSend?.click();
+      }
+    });
+
+    setInterval(loadChatHistory, 4000);
+    loadChatHistory();
+  }
+
+  setupOnsiteMap();
+  initCustomerChat();
   loadServices();
 });

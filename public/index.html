@@ -7,6 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <link rel="stylesheet" href="css/style.css" />
     <style>
       body { background: #10141c; }
@@ -19,6 +20,13 @@
       .request-message.error { background: rgba(220, 85, 85, 0.15); color: #ffb0b0; }
       #service-cards { min-height: 120px; }
       .loading-block { color: var(--text-low); font-size: 14px; }
+      #onsite-map-wrap { display: none; margin-top: 14px; }
+      #onsite-map-wrap.visible { display: block; }
+      #onsite-map { height: 260px; width: 100%; border: 1px solid var(--line); border-radius: 10px; }
+      .map-search-row { display: flex; gap: 8px; }
+      .map-search-row input { flex: 1; }
+      .checkbox-row { display: flex; align-items: center; gap: 10px; font-weight: 500; color: var(--text-mid); }
+      .checkbox-row input { width: 18px; height: 18px; }
       @media (max-width: 600px) {
         .hero h1 { font-size: 34px; }
       }
@@ -34,12 +42,12 @@
 
         <div class="nav-links">
           <a href="#services">Xidmətlər</a>
-          <a href="#request-form">Müraciət</a>
+          <a href="#request-panel">Müraciət</a>
           <a href="#track">İzləmə</a>
         </div>
 
         <div class="nav-cta">
-          <a href="tel:+994501234567" class="tel-badge">+994 50 123 45 67</a>
+          <a href="tel:+994707164142" class="tel-badge">+994 70 716 41 42</a>
           <a href="/admin" class="btn btn-outline btn-sm">Admin</a>
         </div>
       </div>
@@ -57,7 +65,7 @@
             </p>
 
             <div class="hero-actions">
-              <a href="#request-form" class="btn btn-primary">Müraciət et</a>
+              <a href="#request-panel" class="btn btn-primary">Müraciət et</a>
               <a href="#track" class="btn btn-outline">İzləmə et</a>
             </div>
 
@@ -161,7 +169,27 @@
                   <input id="device_info" name="device_info" type="text" placeholder="Məs: Lenovo ThinkPad, 8GB RAM" />
                 </div>
 
-                <button type="submit" class="btn btn-primary btn-block">Müraciəti göndər</button>
+                <div class="field">
+                  <label class="checkbox-row">
+                    <input id="is_onsite" name="is_onsite" type="checkbox" />
+                    <span>Səyyar Xidmət (Ünvanda Təmir)</span>
+                  </label>
+                </div>
+
+                <div id="onsite-map-wrap">
+                  <div class="field">
+                    <label for="onsite-address">Ünvan</label>
+                    <div class="map-search-row">
+                      <input id="onsite-address" type="text" placeholder="Ünvanı yazın və axtarın" />
+                      <button type="button" id="search-address-btn" class="btn btn-outline btn-sm">Axtar</button>
+                    </div>
+                  </div>
+                  <div id="onsite-map"></div>
+                  <input id="onsite-latitude" type="hidden" />
+                  <input id="onsite-longitude" type="hidden" />
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block" style="margin-top: 16px;">Müraciəti göndər</button>
                 <div id="request-message" class="request-message form-msg" aria-live="polite"></div>
               </form>
             </div>
@@ -189,6 +217,11 @@
                 <div class="meta" style="margin-top:8px;">Status yenilənmə: <span id="result-updated">-</span></div>
                 <div class="meta" style="margin-top:8px;">Təklif olunan qiymət: <span id="result-quoted">-</span></div>
                 <div class="meta" style="margin-top:8px;">Son qiymət: <span id="result-final">-</span></div>
+                <div class="meta" style="margin-top:8px;">Ödəniş statusu: <span id="result-payment-status">-</span></div>
+                <div id="result-address-wrap" class="meta" style="margin-top:8px; display:none;">Ünvan: <span id="result-address">-</span></div>
+                <div id="pay-button-wrap" style="display:none; margin-top: 14px;">
+                  <button type="button" id="pay-button" class="btn btn-primary btn-block">Onlayn Ödə</button>
+                </div>
               </div>
             </div>
           </div>
@@ -237,7 +270,48 @@
       </div>
     </footer>
 
-    <a href="https://wa.me/994501234567" target="_blank" rel="noopener" class="whatsapp-fab" aria-label="WhatsApp">WA</a>
+    <div id="payment-modal" class="modal-overlay" aria-hidden="true">
+      <div class="modal">
+        <div class="modal-head">
+          <h3>Onlayn Ödəniş</h3>
+          <button type="button" class="btn btn-ghost" id="close-payment-modal">X</button>
+        </div>
+
+        <form id="payment-form">
+          <div class="field">
+            <label for="card-number">Kart nömrəsi</label>
+            <input id="card-number" type="text" inputmode="numeric" maxlength="19" placeholder="4242 4242 4242 4242" required />
+          </div>
+          <div class="field">
+            <label for="card-expiry">Bitmə tarixi</label>
+            <input id="card-expiry" type="text" maxlength="5" placeholder="MM/YY" required />
+          </div>
+          <div class="field">
+            <label for="card-cvc">CVC</label>
+            <input id="card-cvc" type="text" maxlength="4" inputmode="numeric" placeholder="123" required />
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">Ödənişi təsdiqlə</button>
+        </form>
+      </div>
+    </div>
+
+    <div id="chat-widget" class="chat-widget">
+      <div class="chat-toggle" id="chat-toggle">Canlı Çat</div>
+      <div class="chat-panel" id="chat-panel" style="display:none;">
+        <div class="chat-header">
+          <strong>Hugu Servis</strong>
+          <button type="button" class="btn btn-ghost" id="chat-close">×</button>
+        </div>
+        <div id="customer-chat-messages" class="chat-log"></div>
+        <div class="chat-input-row">
+          <input id="customer-chat-input" type="text" placeholder="Mesaj yazın..." />
+          <button id="customer-chat-send" class="btn btn-primary btn-sm" type="button">Göndər</button>
+        </div>
+      </div>
+    </div>
+
+    <a href="https://wa.me/994707164142?text=Salam%2C%20Hugu%20Servis%20xidmətləri%20ilə%20bağlı%20məlumat%20almaq%20istəyirəm." target="_blank" rel="noopener" class="whatsapp-fab" aria-label="WhatsApp">WA</a>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script src="js/main.js"></script>
   </body>
 </html>

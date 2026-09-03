@@ -96,10 +96,40 @@ async function ensureDatabase() {
       status TEXT NOT NULL DEFAULT 'Gözləmədə',
       quoted_price REAL DEFAULT 0,
       final_price REAL DEFAULT 0,
+      is_onsite INTEGER NOT NULL DEFAULT 0,
+      address TEXT,
+      latitude REAL,
+      longitude REAL,
+      payment_status TEXT NOT NULL DEFAULT 'Ödənilməyib',
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL,
+      sender_type TEXT NOT NULL CHECK(sender_type IN ('customer', 'admin')),
+      message TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  const requestColumns = new Set((await all('PRAGMA table_info(requests)')).map((col) => col.name));
+  const requestColumnsToAdd = ['is_onsite', 'address', 'latitude', 'longitude', 'payment_status'];
+  for (const column of requestColumnsToAdd) {
+    if (!requestColumns.has(column)) {
+      const typeMap = {
+        is_onsite: 'INTEGER NOT NULL DEFAULT 0',
+        address: 'TEXT',
+        latitude: 'REAL',
+        longitude: 'REAL',
+        payment_status: "TEXT NOT NULL DEFAULT 'Ödənilməyib'"
+      };
+      await run(`ALTER TABLE requests ADD COLUMN ${column} ${typeMap[column]}`);
+    }
+  }
 
   const admin = await get('SELECT id FROM admins WHERE username = ?', [ADMIN_USERNAME]);
   if (!admin) {
@@ -226,17 +256,26 @@ app.post('/api/requests', async (req, res) => {
       return res.status(400).json({ error: 'Ad, telefon və xidmət sahələri mütləqdir.' });
     }
 
-    const exists = await get('SELECT id FROM services WHERE LOWER(name) = LOWER(?)', [service_name]);
-    if (!exists) {
+    const serviceExists = await get('SELECT id FROM services WHERE LOWER(name) = LOWER(?)', [service_name]);
+    if (!serviceExists) {
       return res.status(400).json({ error: 'Seçilmiş xidmət bazada tapılmadı.' });
+    }
+
+    const is_onsite = ['1', 'true', 'yes', 'on'].includes(String(req.body.is_onsite || '').toLowerCase());
+    const address = String(req.body.address || '').trim();
+    const latitude = Number(req.body.latitude || 0);
+    const longitude = Number(req.body.longitude || 0);
+
+    if (is_onsite && (!address || !Number.isFinite(latitude) || !Number.isFinite(longitude))) {
+      return res.status(400).json({ error: 'Səyyar xidmət üçün ünvan və xəritə koordinatları mütləqdir.' });
     }
 
     const tracking_code = generateTrackingCode();
     const timestamp = nowIso();
     const result = await run(`
-      INSERT INTO requests (tracking_code, customer_name, customer_phone, service_name, device_info, status, quoted_price, final_price, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [tracking_code, customer_name, customer_phone, service_name, device_info || null, 'Gözləmədə', 0, 0, timestamp, timestamp]);
+      INSERT INTO requests (tracking_code, customer_name, customer_phone, service_name, device_info, status, quoted_price, final_price, is_onsite, address, latitude, longitude, payment_status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [tracking_code, customer_name, customer_phone, service_name, device_info || null, 'Gözləmədə', 0, 0, is_onsite ? 1 : 0, address || null, Number.isFinite(latitude) ? latitude : null, Number.isFinite(longitude) ? longitude : null, 'Ödənilməyib', timestamp, timestamp]);
 
     return res.status(201).json({
       ok: true,
@@ -272,6 +311,11 @@ app.get('/api/requests/track/:code', async (req, res) => {
         status: row.status,
         quoted_price: Number(row.quoted_price || 0),
         final_price: Number(row.final_price || 0),
+        payment_status: row.payment_status || 'Ödənilməyib',
+        is_onsite: Boolean(row.is_onsite),
+        address: row.address || '',
+        latitude: row.latitude != null ? Number(row.latitude) : null,
+        longitude: row.longitude != null ? Number(row.longitude) : null,
         created_at: row.created_at,
         updated_at: row.updated_at,
         created_at_formatted: formatDate(row.created_at),
@@ -290,7 +334,11 @@ app.get('/api/admin/requests', requireAdmin, async (req, res) => {
     return res.json(rows.map((row) => ({
       ...row,
       quoted_price: Number(row.quoted_price || 0),
-      final_price: Number(row.final_price || 0)
+      final_price: Number(row.final_price || 0),
+      payment_status: row.payment_status || 'Ödənilməyib',
+      is_onsite: Boolean(row.is_onsite),
+      latitude: row.latitude != null ? Number(row.latitude) : null,
+      longitude: row.longitude != null ? Number(row.longitude) : null
     })));
   } catch (error) {
     console.error('GET /api/admin/requests error:', error);
@@ -317,18 +365,51 @@ app.put('/api/admin/requests/:id', requireAdmin, async (req, res) => {
     const status = String(req.body.status || 'Gözləmədə').trim();
     const quoted_price = Number(req.body.quoted_price || 0);
     const final_price = Number(req.body.final_price || 0);
+    const payment_status = String(req.body.payment_status || 'Ödənilməyib').trim();
 
     await run(`
       UPDATE requests
-      SET status = ?, quoted_price = ?, final_price = ?, updated_at = ?
+      SET status = ?, quoted_price = ?, final_price = ?, payment_status = ?, updated_at = ?
       WHERE id = ?
-    `, [status, quoted_price, final_price, nowIso(), id]);
+    `, [status, quoted_price, final_price, payment_status, nowIso(), id]);
 
     const row = await get('SELECT * FROM requests WHERE id = ?', [id]);
     return res.json({ ok: true, updated: row });
   } catch (error) {
     console.error('PUT /api/admin/requests/:id error:', error);
     return res.status(500).json({ error: 'Müraciət yenilənə bilmədi.' });
+  }
+});
+
+app.post('/api/requests/:id/pay', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const row = await get('SELECT * FROM requests WHERE id = ?', [id]);
+    if (!row) {
+      return res.status(404).json({ error: 'Müraciət tapılmadı.' });
+    }
+
+    const cardNumber = String(req.body.card_number || '').replace(/\s+/g, '');
+    const expiry = String(req.body.expiry || '').trim();
+    const cvc = String(req.body.cvc || '').trim();
+
+    if (!cardNumber || !expiry || !cvc) {
+      return res.status(400).json({ error: 'Kart məlumatları tam doldurulmalıdır.' });
+    }
+
+    const paymentStatus = 'Ödənilib';
+    const nextStatus = row.status === 'Gözləmədə' || row.status === 'Qiymətləndirildi' ? 'Hazırdır' : row.status || 'Hazırdır';
+
+    await run(`
+      UPDATE requests
+      SET payment_status = ?, status = ?, updated_at = ?
+      WHERE id = ?
+    `, [paymentStatus, nextStatus, nowIso(), id]);
+
+    return res.json({ ok: true, payment_status: paymentStatus, status: nextStatus });
+  } catch (error) {
+    console.error('POST /api/requests/:id/pay error:', error);
+    return res.status(500).json({ error: 'Ödəniş işlənə bilmədi.' });
   }
 });
 
@@ -362,6 +443,84 @@ app.post('/api/admin/logout', (req, res) => {
   req.session.destroy(() => {
     res.json({ ok: true });
   });
+});
+
+app.post('/api/chat/send', async (req, res) => {
+  try {
+    const sessionId = String(req.body.session_id || '').trim() || `guest-${Date.now()}`;
+    const senderType = String(req.body.sender_type || '').trim();
+    const message = String(req.body.message || '').trim();
+
+    if (!['customer', 'admin'].includes(senderType) || !message) {
+      return res.status(400).json({ error: 'Göndərən və mesaj mütləqdir.' });
+    }
+
+    const saved = await run(
+      'INSERT INTO chat_messages (session_id, sender_type, message, created_at) VALUES (?, ?, ?, ?)',
+      [sessionId, senderType, message, nowIso()]
+    );
+
+    const row = await get('SELECT * FROM chat_messages WHERE id = ?', [saved.lastInsertRowid]);
+    return res.status(201).json({ ok: true, message: row });
+  } catch (error) {
+    console.error('POST /api/chat/send error:', error);
+    return res.status(500).json({ error: 'Mesaj göndərilmədi.' });
+  }
+});
+
+app.get('/api/chat/history/:sessionId', async (req, res) => {
+  try {
+    const sessionId = String(req.params.sessionId || '').trim();
+    if (!sessionId) {
+      return res.status(400).json({ error: 'Session id tələb olunur.' });
+    }
+
+    const rows = await all('SELECT * FROM chat_messages WHERE session_id = ? ORDER BY created_at ASC', [sessionId]);
+    return res.json({ ok: true, messages: rows });
+  } catch (error) {
+    console.error('GET /api/chat/history error:', error);
+    return res.status(500).json({ error: 'Çat tarixçəsi yüklənə bilmədi.' });
+  }
+});
+
+app.get('/api/admin/chats', requireAdmin, async (req, res) => {
+  try {
+    const rows = await all('SELECT * FROM chat_messages ORDER BY created_at DESC');
+    const sessions = new Map();
+
+    for (const row of rows) {
+      const existing = sessions.get(row.session_id) || {
+        session_id: row.session_id,
+        customer_name: row.session_id,
+        last_message: '',
+        last_message_at: row.created_at,
+        unread_count: 0,
+        messages: []
+      };
+
+      existing.last_message = row.message;
+      existing.last_message_at = row.created_at;
+      existing.messages.push(row);
+      if (row.sender_type === 'customer') {
+        existing.unread_count += 1;
+      }
+      sessions.set(row.session_id, existing);
+    }
+
+    const chats = Array.from(sessions.values())
+      .map((chat) => ({
+        ...chat,
+        unread_count: Number(chat.unread_count || 0),
+        last_message_at: chat.last_message_at || new Date().toISOString(),
+        customer_name: chat.customer_name || chat.session_id
+      }))
+      .sort((a, b) => new Date(b.last_message_at) - new Date(a.last_message_at));
+
+    return res.json({ ok: true, chats });
+  } catch (error) {
+    console.error('GET /api/admin/chats error:', error);
+    return res.status(500).json({ error: 'Canlı çat siyahısı yüklənə bilmədi.' });
+  }
 });
 
 startServer();
