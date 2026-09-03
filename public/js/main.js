@@ -27,6 +27,10 @@
   const cardBrandBadge = document.getElementById('card-brand-badge');
   const themeToggle = document.getElementById('theme-toggle');
   const resultPaymentMethod = document.getElementById('result-payment-method');
+  const customerPhoneInput = document.getElementById('customer_phone');
+  const postSubmitChoice = document.getElementById('post-submit-choice');
+  const payNowBtn = document.getElementById('pay-now-btn');
+  const payLaterBtn = document.getElementById('pay-later-btn');
   let activeTrackingId = null;
 
   const onsiteToggle = document.getElementById('is_onsite');
@@ -64,12 +68,28 @@
     return 'status-baxilir';
   }
 
+  function sanitizePhone(value) {
+    const digits = String(value || '').replace(/\D/g, '');
+    const normalized = digits.replace(/^0+/, '').slice(0, 9);
+    return normalized;
+  }
+
+  function formatPhoneValue(value) {
+    const digits = sanitizePhone(value);
+    if (!digits) return '';
+    if (digits.length <= 2) return `+994 (${digits}`;
+    if (digits.length <= 5) return `+994 (${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    if (digits.length <= 7) return `+994 (${digits.slice(0, 2)}) ${digits.slice(2, 5)}-${digits.slice(5)}`;
+    return `+994 (${digits.slice(0, 2)}) ${digits.slice(2, 5)}-${digits.slice(5, 7)}-${digits.slice(7, 9)}`;
+  }
+
   function applyTheme(theme) {
     const root = document.body;
-    const resolved = theme === 'light' ? 'theme-light' : '';
-    root.classList.toggle('theme-light', resolved === 'theme-light');
-    if (themeToggle) themeToggle.textContent = theme === 'light' ? 'Dark' : 'Light';
-    localStorage.setItem('hugu-theme', theme);
+    const resolved = theme === 'light' ? 'light' : 'dark';
+    root.dataset.theme = resolved;
+    root.classList.toggle('theme-light', resolved === 'light');
+    if (themeToggle) themeToggle.textContent = resolved === 'light' ? 'Dark' : 'Light';
+    localStorage.setItem('hugu-theme', resolved);
   }
 
   function isWithinAzerbaijan(lat, lng) {
@@ -306,6 +326,64 @@
     });
   }
 
+  function showPaymentChoicePanel(request = null) {
+    if (!postSubmitChoice) return;
+    if (!request || (request.payment_status || 'Ödənilməyib') === 'Ödənilib') {
+      postSubmitChoice.style.display = 'none';
+      return;
+    }
+
+    postSubmitChoice.style.display = 'block';
+    postSubmitChoice.dataset.requestId = request.id || activeTrackingId || '';
+
+    const text = request.payment_method === 'prepay'
+      ? 'Ödəniş seçimi: kartla əvvəlcədən ödəniş və ya təhvil alarkən ödə.'
+      : 'Bu sifariş hələ ödənilməmişdir. Siz istədiyiniz ödəniş üsulunu seçə bilərsiniz.';
+
+    const title = postSubmitChoice.querySelector('.choice-title');
+    const description = postSubmitChoice.querySelector('.choice-description');
+    if (title) title.textContent = 'Ödəniş seçimi';
+    if (description) description.textContent = text;
+
+    const selectedRequestId = Number(request.id || activeTrackingId || 0);
+    if (payNowBtn) {
+      payNowBtn.onclick = () => {
+        if (selectedRequestId) activeTrackingId = selectedRequestId;
+        openPaymentModal();
+      };
+    }
+
+    if (payLaterBtn) {
+      payLaterBtn.onclick = async () => {
+        if (!selectedRequestId) return;
+        try {
+          const response = await fetch(`/api/requests/${selectedRequestId}/confirm-cash`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          const body = await response.json();
+          if (!response.ok) {
+            showToast(body.error || 'Ödəniş seçimində xəta baş verdi.', 'error');
+            return;
+          }
+          postSubmitChoice.style.display = 'none';
+          showToast('Sifariş “Təhvil veriləndə ödənəcək” kimi qeydləndi.', 'success');
+          if (resultPaymentStatus) {
+            resultPaymentStatus.textContent = body.payment_status || 'Təhvil veriləndə ödənəcək';
+          }
+          if (resultStatus) {
+            resultStatus.textContent = body.status || 'Təhvil veriləndə ödənəcək';
+            resultStatus.className = `status-chip ${statusClass(body.status)}`;
+          }
+          if (trackForm) trackForm.dispatchEvent(new Event('submit'));
+        } catch (error) {
+          console.error('cash selection error:', error);
+          showToast('Təhvil alarkən ödəniş qeyd edilmədi.', 'error');
+        }
+      };
+    }
+  }
+
   function openPaymentModal() {
     if (paymentModal) {
       paymentModal.classList.add('open');
@@ -335,6 +413,17 @@
       cardBrandBadge.style.color = '#081018';
     }
     cardNumberInput.value = digits.replace(/(.{4})/g, '$1 ').trim();
+  });
+
+  customerPhoneInput?.addEventListener('input', () => {
+    const sanitized = sanitizePhone(customerPhoneInput.value);
+    const formatted = sanitized ? (() => {
+      if (sanitized.length <= 2) return `+994 (${sanitized}`;
+      if (sanitized.length <= 5) return `+994 (${sanitized.slice(0, 2)}) ${sanitized.slice(2)}`;
+      if (sanitized.length <= 7) return `+994 (${sanitized.slice(0, 2)}) ${sanitized.slice(2, 5)}-${sanitized.slice(5)}`;
+      return `+994 (${sanitized.slice(0, 2)}) ${sanitized.slice(2, 5)}-${sanitized.slice(5, 7)}-${sanitized.slice(7, 9)}`;
+    })() : '';
+    customerPhoneInput.value = formatted;
   });
 
   paymentForm?.addEventListener('submit', async (event) => {
@@ -375,9 +464,10 @@
     event.preventDefault();
 
     const isOnsite = Boolean(onsiteToggle && onsiteToggle.checked);
+    const customerPhone = sanitizePhone(document.getElementById('customer_phone').value);
     const payload = {
       customer_name: document.getElementById('customer_name').value.trim(),
-      customer_phone: document.getElementById('customer_phone').value.trim(),
+      customer_phone: customerPhone,
       service_name: serviceSelect ? serviceSelect.value : '',
       device_info: document.getElementById('device_info').value.trim(),
       is_onsite: isOnsite,
@@ -419,9 +509,14 @@
       if (paymentMethodSelect) paymentMethodSelect.value = 'prepay';
       setMessage(`Müraciət yarandı. İzləmə kodu: ${body.tracking_code} · ${body.created_at}`, 'success');
 
-      if (body.payment_method === 'prepay' && body.request_id) {
+      if (body.request_id) {
         activeTrackingId = Number(body.request_id);
-        openPaymentModal();
+        showPaymentChoicePanel({
+          id: activeTrackingId,
+          payment_method: body.payment_method || 'later',
+          payment_status: body.payment_status || 'Ödənilməyib',
+          final_price: 0
+        });
       }
     } catch (error) {
       console.error('requestForm error:', error);
@@ -458,6 +553,7 @@
       resultFinal.textContent = `${Number(request.final_price || 0).toFixed(2)} ₼`;
       resultPaymentMethod.textContent = request.payment_method === 'prepay' ? 'Öncədən Ödəniş (Onlayn Kartla)' : 'Təmirdən / Təhvil Verildikdən Sonra Ödəniş';
       resultPaymentStatus.textContent = request.payment_status || 'Ödənilməyib';
+      showPaymentChoicePanel(request);
 
       if (request.is_onsite && (request.address || request.latitude != null || request.longitude != null)) {
         resultAddressWrap.style.display = 'block';
@@ -486,34 +582,92 @@
     localStorage.setItem('hugu-chat-session', sessionId);
 
     const chatToggle = document.getElementById('chat-toggle');
+    const chatToggleBtn = document.getElementById('chat-toggle-btn');
     const chatPanel = document.getElementById('chat-panel');
     const chatMessages = document.getElementById('customer-chat-messages');
     const chatInput = document.getElementById('customer-chat-input');
     const chatSend = document.getElementById('customer-chat-send');
     const closeChat = document.getElementById('chat-close');
+    const greetingText = 'Salam! Hugu Servis İT Dəstək Mərkəzinə xoş gəlmisiniz. Sizə necə kömək edə bilərəm? 🛠️';
+
+    function setChatOpen(isOpen) {
+      if (!chatPanel) return;
+      chatPanel.style.display = isOpen ? 'block' : 'none';
+      if (chatToggleBtn) {
+        chatToggleBtn.setAttribute('aria-expanded', String(isOpen));
+      }
+    }
+
+    async function showInitialGreeting() {
+      if (!chatPanel || !chatMessages) return;
+      const alreadyShown = localStorage.getItem('hugu-chat-greeting-shown') === 'true';
+      if (alreadyShown) return;
+
+      try {
+        const response = await fetch('/api/chat/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId, sender_type: 'bot', message: greetingText })
+        });
+
+        if (response.ok) {
+          localStorage.setItem('hugu-chat-greeting-shown', 'true');
+          await loadChatHistory();
+        }
+      } catch (error) {
+        console.error('initial bot greeting error:', error);
+      }
+    }
 
     async function loadChatHistory() {
       if (!chatMessages) return;
       try {
         const response = await fetch(`/api/chat/history/${encodeURIComponent(sessionId)}`);
+        if (!response.ok) {
+          chatMessages.innerHTML = '';
+          return;
+        }
+
         const data = await response.json();
-        const messages = data.messages || [];
-        chatMessages.innerHTML = messages.map((msg) => `
-          <div class="chat-bubble ${msg.sender_type === 'customer' ? 'customer' : 'admin'}">${msg.message}</div>
-        `).join('');
+        const messages = Array.isArray(data?.messages) ? data.messages : [];
+        chatMessages.innerHTML = messages.map((msg) => {
+          const sender = String(msg.sender_type || 'customer');
+          const isCustomer = sender === 'customer';
+          const isAdmin = sender === 'admin';
+          const isBot = sender === 'bot';
+          const label = isBot ? '🤖 Hugu AI' : isAdmin ? '👨‍💼 Hugu Team' : '🧑 Müşteri';
+          const className = isBot ? 'bot' : isAdmin ? 'admin' : 'customer';
+
+          return `
+            <div class="chat-bubble ${className}">
+              <span class="chat-badge">${label}</span>
+              <div class="chat-message">${String(msg.message || '').replace(/\n/g, '<br>')}</div>
+            </div>
+          `;
+        }).join('');
         chatMessages.scrollTop = chatMessages.scrollHeight;
       } catch (error) {
         console.error('loadChatHistory error:', error);
+        if (chatMessages) chatMessages.innerHTML = '';
       }
     }
 
     chatToggle?.addEventListener('click', () => {
       const isVisible = chatPanel && chatPanel.style.display !== 'none';
-      if (chatPanel) chatPanel.style.display = isVisible ? 'none' : 'block';
+      setChatOpen(!isVisible);
+    });
+
+    chatToggleBtn?.addEventListener('click', async () => {
+      const isVisible = chatPanel && chatPanel.style.display !== 'none';
+      const nextState = !isVisible;
+      setChatOpen(nextState);
+      if (nextState) {
+        await showInitialGreeting();
+      }
     });
 
     closeChat?.addEventListener('click', () => {
-      if (chatPanel) chatPanel.style.display = 'none';
+      setChatOpen(false);
     });
 
     chatSend?.addEventListener('click', async () => {
@@ -546,7 +700,7 @@
   const savedTheme = localStorage.getItem('hugu-theme') || 'dark';
   applyTheme(savedTheme);
   themeToggle?.addEventListener('click', () => {
-    const nextTheme = document.body.classList.contains('theme-light') ? 'dark' : 'light';
+    const nextTheme = document.body.dataset.theme === 'light' ? 'dark' : 'light';
     applyTheme(nextTheme);
   });
 

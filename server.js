@@ -30,6 +30,91 @@ function formatDate(value) {
   return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+const BOT_HANDOFF_NOTICE = 'Anladım, məsələni tam dəqiqləşdirmək üçün müraciətinizi texniki operatorumuza yönləndirdim. ⏱️ Əməkdaşlarımız 15 dəqiqə ərzində bu canlı çat vasitəsilə sizə birbaşa cavab verəcək.';
+
+function normalizeBotText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\səığöüçş]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function getIntentKeywords(text) {
+  const greetingPattern = /(salam|salamlar|salam aleykum|aleykum salam|xos gorduk|xoş gəldiniz|mühəndis|mühendis)/;
+  const courtesyPattern = /(necesiz|necesiniz|sağol|sagol|tesekkur|təshəkkür|teşekkür|ne var ne yox|ne var ne yox)/;
+  const formatPattern = /(format|windows|əməliyyat sistemi|emeliyyat sistemi|os|operating system|driver|drayver|quraşdırma|qurasdirma)/;
+  const pricingPattern = /(qiymet|qiymət|qiyməti|pulla|kassa|neçədir|nece|qeder|nedir|deyer|dəyər)/;
+  const trackingPattern = /(izleme|izləmə|status|sifaris|sifariş|kod|kodu|haradadir|haradadır|harada|sifarisin|statusu)/;
+
+  if (greetingPattern.test(text)) return 'greeting';
+  if (courtesyPattern.test(text)) return 'courtesy';
+  if (formatPattern.test(text)) return 'format';
+  if (pricingPattern.test(text)) return 'pricing';
+  if (trackingPattern.test(text)) return 'tracking';
+  return null;
+}
+
+function hasRepeatedTopic(currentText, historyMessages = []) {
+  const current = normalizeBotText(currentText);
+  if (!current) return false;
+
+  const customerHistory = historyMessages
+    .filter((msg) => String(msg.sender_type || '').toLowerCase() === 'customer')
+    .map((msg) => normalizeBotText(msg.message));
+
+  if (customerHistory.length < 2) return false;
+
+  const currentKeywords = current.split(' ').filter((word) => word.length > 3);
+  if (!currentKeywords.length) return false;
+
+  return customerHistory.filter((msg) => {
+    if (!msg) return false;
+    return currentKeywords.some((keyword) => msg.includes(keyword));
+  }).length >= 2;
+}
+
+function getKnowledgeBaseReply(message, historyMessages = []) {
+  const text = normalizeBotText(message);
+  const intent = getIntentKeywords(text);
+  const customerHistory = historyMessages
+    .filter((msg) => String(msg.sender_type || '').toLowerCase() === 'customer')
+    .map((msg) => normalizeBotText(msg.message));
+  const totalCustomerTurns = customerHistory.length;
+
+  if (!text) {
+    return 'Salam! Hugu Servis İT Dəstək Mərkəzinə xoş gəlmisiniz. Sizə necə kömək edə bilərəm? 🛠️';
+  }
+
+  if (hasRepeatedTopic(message, historyMessages) || totalCustomerTurns >= 3 || (!intent && text.length >= 5)) {
+    return BOT_HANDOFF_NOTICE;
+  }
+
+  if (intent === 'greeting') {
+    return 'Salam! Hugu Servis İT Dəstək Mərkəzinə xoş gəlmisiniz. Sizə necə kömək edə bilərəm? 🛠️';
+  }
+
+  if (intent === 'courtesy') {
+    return 'Çox sağ olun, təşəkkür edirəm, mən yaxşıyam! 😊 Siz necəsiniz? Kompüterinizdə və ya avadanlığınızda hər hansı texniki problem var?';
+  }
+
+  if (intent === 'format') {
+    return 'Windows 10/11 formatı, lisenziyalı quraşdırma və bütün drayverlərin yazılması xidmətimiz var. Qiyməti ortalama 25.00 ₼ təşkil edir. Sifariş formundan müraciət edə bilərsiniz!';
+  }
+
+  if (intent === 'pricing') {
+    return 'Xidmət qiymətlərimiz görüləcək işə görə dəyişir:\n• Format və Dəstək: ~25 ₼\n• Virus Təmizliyi: ~15 ₼\n• SSD / Avadanlıq quraşdırılması: ~50 ₼\nİlk diaqnostika pulsuzdur.';
+  }
+
+  if (intent === 'tracking') {
+    return 'Sifarişinizin statusunu öyrənmək üçün ana səhifədəki "İzləmə et" bölməsinə izləmə kodunuzu daxil etməyiniz kifayətdir.';
+  }
+
+  return BOT_HANDOFF_NOTICE;
+}
+
 function generateTrackingCode() {
   return `HG-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
 }
@@ -108,15 +193,47 @@ async function ensureDatabase() {
     )
   `);
 
-  await run(`
-    CREATE TABLE IF NOT EXISTS chat_messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      session_id TEXT NOT NULL,
-      sender_type TEXT NOT NULL CHECK(sender_type IN ('customer', 'admin')),
-      message TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
+  const chatTableDefinition = await get("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'chat_messages'");
+  if (!chatTableDefinition || !chatTableDefinition.sql || !chatTableDefinition.sql.includes("'bot'")) {
+    const migrateChatTable = async () => {
+      const existingRows = await all('SELECT * FROM chat_messages ORDER BY id ASC');
+      await run('ALTER TABLE chat_messages RENAME TO chat_messages_old');
+      await run(`
+        CREATE TABLE chat_messages (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          session_id TEXT NOT NULL,
+          sender_type TEXT NOT NULL CHECK(sender_type IN ('customer', 'admin', 'bot')),
+          message TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `);
+      if (existingRows.length) {
+        const columns = ['id', 'session_id', 'sender_type', 'message', 'created_at'];
+        for (const row of existingRows) {
+          await run(
+            `INSERT INTO chat_messages (${columns.join(', ')}) VALUES (?, ?, ?, ?, ?)`,
+            [row.id, row.session_id, row.sender_type, row.message, row.created_at]
+          );
+        }
+      }
+      await run('DROP TABLE chat_messages_old');
+    };
+
+    const tableExists = await get("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'chat_messages'");
+    if (tableExists) {
+      await migrateChatTable();
+    } else {
+      await run(`
+        CREATE TABLE chat_messages (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          session_id TEXT NOT NULL,
+          sender_type TEXT NOT NULL CHECK(sender_type IN ('customer', 'admin', 'bot')),
+          message TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `);
+    }
+  }
 
   const requestColumns = new Set((await all('PRAGMA table_info(requests)')).map((col) => col.name));
   const requestColumnsToAdd = ['is_onsite', 'address', 'latitude', 'longitude', 'payment_method', 'payment_status'];
@@ -459,6 +576,30 @@ app.post('/api/requests/:id/pay', async (req, res) => {
   }
 });
 
+app.post('/api/requests/:id/confirm-cash', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const row = await get('SELECT * FROM requests WHERE id = ?', [id]);
+    if (!row) {
+      return res.status(404).json({ error: 'Müraciət tapılmadı.' });
+    }
+
+    const paymentStatus = 'Təhvil veriləndə ödənəcək';
+    const nextStatus = 'Təhvil veriləndə ödənəcək';
+
+    await run(`
+      UPDATE requests
+      SET payment_status = ?, status = ?, payment_method = 'later', updated_at = ?
+      WHERE id = ?
+    `, [paymentStatus, nextStatus, nowIso(), id]);
+
+    return res.json({ ok: true, payment_status: paymentStatus, status: nextStatus, payment_method: 'later' });
+  } catch (error) {
+    console.error('POST /api/requests/:id/confirm-cash error:', error);
+    return res.status(500).json({ error: 'Təhvil alarkən ödəniş qeydlənə bilmədi.' });
+  }
+});
+
 app.post('/api/admin/login', async (req, res) => {
   try {
     const username = String(req.body.username || '').trim();
@@ -497,7 +638,7 @@ app.post('/api/chat/send', async (req, res) => {
     const senderType = String(req.body.sender_type || '').trim();
     const message = String(req.body.message || '').trim();
 
-    if (!['customer', 'admin'].includes(senderType) || !message) {
+    if (!['customer', 'admin', 'bot'].includes(senderType) || !message) {
       return res.status(400).json({ error: 'Göndərən və mesaj mütləqdir.' });
     }
 
@@ -507,6 +648,18 @@ app.post('/api/chat/send', async (req, res) => {
     );
 
     const row = await get('SELECT * FROM chat_messages WHERE id = ?', [saved.lastInsertRowid]);
+
+    if (senderType === 'customer') {
+      const sessionHistory = await all('SELECT * FROM chat_messages WHERE session_id = ? ORDER BY created_at ASC', [sessionId]);
+      const botReply = getKnowledgeBaseReply(message, sessionHistory);
+      const botSaved = await run(
+        'INSERT INTO chat_messages (session_id, sender_type, message, created_at) VALUES (?, ?, ?, ?)',
+        [sessionId, 'bot', botReply, nowIso()]
+      );
+      const botRow = await get('SELECT * FROM chat_messages WHERE id = ?', [botSaved.lastInsertRowid]);
+      return res.status(201).json({ ok: true, message: row, bot_message: botRow, reply: botReply });
+    }
+
     return res.status(201).json({ ok: true, message: row });
   } catch (error) {
     console.error('POST /api/chat/send error:', error);
@@ -522,7 +675,7 @@ app.get('/api/chat/history/:sessionId', async (req, res) => {
     }
 
     const rows = await all('SELECT * FROM chat_messages WHERE session_id = ? ORDER BY created_at ASC', [sessionId]);
-    return res.json({ ok: true, messages: rows });
+    return res.json({ ok: true, messages: rows || [] });
   } catch (error) {
     console.error('GET /api/chat/history error:', error);
     return res.status(500).json({ error: 'Çat tarixçəsi yüklənə bilmədi.' });

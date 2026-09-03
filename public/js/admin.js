@@ -376,9 +376,20 @@ document.addEventListener('DOMContentLoaded', () => {
       const messages = data.messages || [];
 
       if (!adminChatMessages) return;
-      adminChatMessages.innerHTML = messages.map((msg) => `
-        <div class="bubble ${msg.sender_type === 'customer' ? 'customer' : 'admin'}">${msg.message}</div>
-      `).join('');
+      adminChatMessages.innerHTML = messages.map((msg) => {
+        const sender = String(msg.sender_type || 'customer');
+        const isBot = sender === 'bot';
+        const isCustomer = sender === 'customer';
+        const label = isBot ? '🤖 Hugu AI Bot' : isCustomer ? '🧑 Müşteri' : '👨‍💼 Hugu Team';
+        const className = isBot ? 'bot' : isCustomer ? 'customer' : 'admin';
+
+        return `
+          <div class="bubble ${className}">
+            <span class="chat-badge">${label}</span>
+            <div class="chat-message">${msg.message}</div>
+          </div>
+        `;
+      }).join('');
       adminChatMessages.scrollTop = adminChatMessages.scrollHeight;
     } catch (error) {
       console.error('openChat error:', error);
