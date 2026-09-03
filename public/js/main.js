@@ -334,6 +334,17 @@ document.addEventListener('DOMContentLoaded', function () {
   let currentTrack = null; // { id, code, phone }
   let chatPollTimer = null;
 
+  async function refreshTrackDetails() {
+    if (!currentTrack) return;
+    const { ok, status, body: data } = await doFetch(`/api/requests/track?code=${encodeURIComponent(currentTrack.code)}&phone=${encodeURIComponent(currentTrack.phone)}`);
+    if (!ok) {
+      const msg = (data && (data.error || data.details)) || `Tapılmadı (${status})`;
+      showToast('error', msg);
+      return;
+    }
+    renderTrackResult(data);
+  }
+
   const trackFormEl = el('#track-form');
   if (trackFormEl) {
     trackFormEl.addEventListener('submit', async (e) => {
@@ -365,12 +376,22 @@ document.addEventListener('DOMContentLoaded', function () {
     el('#track-result').style.display = 'block';
     el('#tr-service').textContent = data.device_info || 'Müraciətiniz';
     el('#tr-device').textContent = data.problem_description || '';
+    const statusValue = data.status || 'yeni';
     const chip = el('#tr-status');
-    chip.className = 'status-chip status-' + data.status;
-    chip.textContent = statusLabel(data.status);
+    chip.className = 'status-chip status-' + statusValue;
+    chip.textContent = statusLabel(statusValue);
 
-    const price = data.final_price || data.quoted_price;
-    el('#tr-price').textContent = price ? `${price} ₼` : 'Qiymət gözlənilir';
+    const proposedPrice = data.quoted_price !== null && data.quoted_price !== undefined ? Number(data.quoted_price) : null;
+    const finalPrice = data.final_price !== null && data.final_price !== undefined ? Number(data.final_price) : null;
+    const price = finalPrice ?? proposedPrice;
+
+    if (finalPrice !== null && finalPrice !== undefined) {
+      el('#tr-price').textContent = `${finalPrice} ₼`;
+    } else if (proposedPrice !== null && proposedPrice !== undefined) {
+      el('#tr-price').textContent = `${proposedPrice} ₼`;
+    } else {
+      el('#tr-price').textContent = 'Qiymət gözlənilir';
+    }
 
     const payBtn = el('#pay-btn');
     if (price && !data.is_paid) {
@@ -408,8 +429,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function startChatPolling() {
     loadMessages();
+    refreshTrackDetails();
     if (chatPollTimer) clearInterval(chatPollTimer);
-    chatPollTimer = setInterval(loadMessages, 4000);
+    chatPollTimer = setInterval(() => {
+      loadMessages();
+      refreshTrackDetails();
+    }, 4000);
   }
 
   el('#chat-send').addEventListener('click', sendChat);

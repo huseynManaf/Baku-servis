@@ -362,7 +362,16 @@ app.get('/api/requests/track', async (req, res) => {
     const result = await db.query('SELECT * FROM requests WHERE tracking_code = $1 AND phone = $2', [code, phone]);
     const row = result.rows[0];
     if (!row) return res.status(404).json({ error: 'Muraciet tapilmadi' });
-    res.json(publicRequest(row));
+
+    const latest = {
+      ...row,
+      status: row.status || 'yeni',
+      quoted_price: row.quoted_price !== null && row.quoted_price !== undefined ? Number(row.quoted_price) : null,
+      final_price: row.final_price !== null && row.final_price !== undefined ? Number(row.final_price) : null,
+      is_paid: Boolean(row.is_paid)
+    };
+
+    res.json(publicRequest(latest));
   } catch (err) {
     console.error('Tracking error:');
     console.error(err && err.stack ? err.stack : err);
