@@ -394,20 +394,19 @@ document.addEventListener('DOMContentLoaded', function () {
     chip.className = 'status-chip status-' + statusValue;
     chip.textContent = statusLabel(statusValue);
 
-    const proposedPrice = data.quoted_price !== null && data.quoted_price !== undefined ? Number(data.quoted_price) : null;
-    const finalPrice = data.final_price !== null && data.final_price !== undefined ? Number(data.final_price) : null;
-    const price = finalPrice ?? proposedPrice;
+    const proposedPrice = data.quoted_price !== null && data.quoted_price !== undefined && data.quoted_price !== '' ? Number(data.quoted_price) : null;
+    const finalPrice = data.final_price !== null && data.final_price !== undefined && data.final_price !== '' ? Number(data.final_price) : null;
+    const hasPrice = (value) => value !== null && value !== undefined && value !== '' && Number(value) !== 0 && !Number.isNaN(Number(value));
+    const resolvedPrice = hasPrice(finalPrice) ? finalPrice : (hasPrice(proposedPrice) ? proposedPrice : null);
 
-    if (finalPrice !== null && finalPrice !== undefined && !Number.isNaN(finalPrice)) {
-      el('#tr-price').textContent = `${finalPrice} ₼`;
-    } else if (proposedPrice !== null && proposedPrice !== undefined && !Number.isNaN(proposedPrice)) {
-      el('#tr-price').textContent = `${proposedPrice} ₼`;
+    if (resolvedPrice !== null) {
+      el('#tr-price').textContent = `${resolvedPrice} ₼`;
     } else {
       el('#tr-price').textContent = 'Qiymət gözlənilir';
     }
 
     const payBtn = el('#pay-btn');
-    if (price && !data.is_paid) {
+    if (resolvedPrice !== null && !data.is_paid) {
       payBtn.style.display = 'inline-flex';
       payBtn.onclick = async () => {
         payBtn.disabled = true; payBtn.textContent = 'Ödəniş edilir...';

@@ -119,7 +119,16 @@
             <h4>Status və qiymət</h4>
             <div class="field">
               <label>Status</label>
-              <select class="status-select" id="d-status">
+              <select class="status-select" id="statusSelect">
+                <option value="yeni">Yeni</option>
+                <option value="baxilir">Baxılır</option>
+                <option value="qiymetlendirildi">Qiymətləndirildi</option>
+                <option value="icrada">İcrada</option>
+                <option value="hazir">Hazırdır</option>
+                <option value="teslim">Təhvil verilib</option>
+                <option value="legv">Ləğv edilib</option>
+              </select>
+              <select class="status-select" id="d-status" style="display:none">
                 <option value="yeni">Yeni</option>
                 <option value="baxilir">Baxılır</option>
                 <option value="qiymetlendirildi">Qiymətləndirildi</option>
@@ -131,11 +140,13 @@
             </div>
             <div class="field">
               <label>Təklif olunan qiymət (₼)</label>
-              <input type="number" id="d-quoted" step="0.01">
+              <input type="number" id="quotedPriceInput" step="0.01">
+              <input type="number" id="d-quoted" step="0.01" style="display:none">
             </div>
             <div class="field">
               <label>Son qiymət (₼)</label>
-              <input type="number" id="d-final" step="0.01">
+              <input type="number" id="finalPriceInput" step="0.01">
+              <input type="number" id="d-final" step="0.01" style="display:none">
             </div>
             <button class="btn btn-primary btn-block" id="d-save">Yadda saxla</button>
           </div>

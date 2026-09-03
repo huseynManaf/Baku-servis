@@ -542,25 +542,57 @@ app.get('/api/admin/requests/:id', requireAdmin, async (req, res) => {
   }
 });
 
+async function updateRequestRecord(requestId, payload) {
+  const { status, quoted_price, final_price } = payload || {};
+  const reqRes = await db.query('SELECT * FROM requests WHERE id = $1', [requestId]);
+  const previousRow = reqRes.rows[0];
+  if (!previousRow) {
+    return { error: 'Tapilmadi', statusCode: 404 };
+  }
+
+  const statusValue = status !== undefined && status !== null && status !== '' ? status : previousRow.status;
+  const quotedValue = quoted_price !== undefined && quoted_price !== null && quoted_price !== '' ? Number(quoted_price) : previousRow.quoted_price;
+  const finalValue = final_price !== undefined && final_price !== null && final_price !== '' ? Number(final_price) : previousRow.final_price;
+
+  const updateRes = await db.query(
+    `UPDATE requests SET status = $1, quoted_price = $2, final_price = $3, updated_at = $4 WHERE id = $5 RETURNING *`,
+    [statusValue, quotedValue, finalValue, new Date().toISOString(), requestId]
+  );
+
+  const updatedRow = updateRes.rows[0];
+  await addRequestUpdateMessage(requestId, previousRow, { status: statusValue, quoted_price: quotedValue, final_price: finalValue });
+  return { ok: true, request: updatedRow };
+}
+
+app.put('/api/requests/:id', requireAdmin, async (req, res) => {
+  try {
+    const result = await updateRequestRecord(req.params.id, req.body);
+    if (result && result.error) return res.status(result.statusCode || 400).json({ error: result.error });
+    res.json(result);
+  } catch (err) {
+    console.error('Admin update request error:');
+    console.error(err && err.stack ? err.stack : err);
+    res.status(500).json({ error: 'Server xətası', details: err && err.message ? err.message : String(err) });
+  }
+});
+
+app.post('/api/requests/:id', requireAdmin, async (req, res) => {
+  try {
+    const result = await updateRequestRecord(req.params.id, req.body);
+    if (result && result.error) return res.status(result.statusCode || 400).json({ error: result.error });
+    res.json(result);
+  } catch (err) {
+    console.error('Admin update request error:');
+    console.error(err && err.stack ? err.stack : err);
+    res.status(500).json({ error: 'Server xətası', details: err && err.message ? err.message : String(err) });
+  }
+});
+
 app.put('/api/admin/requests/:id', requireAdmin, async (req, res) => {
   try {
-    const { status, quoted_price, final_price } = req.body;
-    const reqRes = await db.query('SELECT * FROM requests WHERE id = $1', [req.params.id]);
-    const previousRow = reqRes.rows[0];
-    if (!previousRow) return res.status(404).json({ error: 'Tapilmadi' });
-
-    const parts = [];
-    const params = [];
-    if (status) { params.push(status); parts.push(`status = $${params.length}`); }
-    if (quoted_price !== undefined) { params.push(quoted_price); parts.push(`quoted_price = $${params.length}`); }
-    if (final_price !== undefined) { params.push(final_price); parts.push(`final_price = $${params.length}`); }
-    if (!parts.length) return res.status(400).json({ error: 'Deyishiklik yoxdur' });
-    params.push(new Date().toISOString()); parts.push(`updated_at = $${params.length}`);
-    params.push(req.params.id);
-    const q = `UPDATE requests SET ${parts.join(', ')} WHERE id = $${params.length}`;
-    await db.query(q, params);
-    await addRequestUpdateMessage(req.params.id, previousRow, { status, quoted_price, final_price });
-    res.json({ ok: true });
+    const result = await updateRequestRecord(req.params.id, req.body);
+    if (result && result.error) return res.status(result.statusCode || 400).json({ error: result.error });
+    res.json(result);
   } catch (err) {
     console.error('Admin update request error:');
     console.error(err && err.stack ? err.stack : err);
