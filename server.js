@@ -554,18 +554,25 @@ async function updateRequestRecord(requestId, payload) {
   const quotedValue = quoted_price !== undefined && quoted_price !== null && quoted_price !== '' ? Number(quoted_price) : previousRow.quoted_price;
   const finalValue = final_price !== undefined && final_price !== null && final_price !== '' ? Number(final_price) : previousRow.final_price;
 
-  const updateRes = await db.query(
-    `UPDATE requests SET status = $1, quoted_price = $2, final_price = $3, updated_at = $4 WHERE id = $5 RETURNING *`,
-    [statusValue, quotedValue, finalValue, new Date().toISOString(), requestId]
-  );
+  const isPg = !!(db && db.pool);
+  const sql = isPg
+    ? 'UPDATE requests SET status = $1, quoted_price = $2, final_price = $3, updated_at = $4 WHERE id = $5'
+    : 'UPDATE requests SET status = ?, quoted_price = ?, final_price = ?, updated_at = ? WHERE id = ?';
+  const params = isPg
+    ? [statusValue, quotedValue, finalValue, new Date().toISOString(), requestId]
+    : [statusValue, quotedValue, finalValue, new Date().toISOString(), requestId];
 
-  const updatedRow = updateRes.rows[0];
+  await db.query(sql, params);
+
+  const updatedQuery = await db.query('SELECT * FROM requests WHERE id = $1', [requestId]);
+  const updatedRow = updatedQuery.rows[0];
   await addRequestUpdateMessage(requestId, previousRow, { status: statusValue, quoted_price: quotedValue, final_price: finalValue });
-  return { ok: true, request: updatedRow };
+  return { success: true, request: updatedRow };
 }
 
 app.put('/api/requests/:id', requireAdmin, async (req, res) => {
   try {
+    console.log('Update request req.body:', req.body);
     const result = await updateRequestRecord(req.params.id, req.body);
     if (result && result.error) return res.status(result.statusCode || 400).json({ error: result.error });
     res.json(result);
@@ -578,6 +585,7 @@ app.put('/api/requests/:id', requireAdmin, async (req, res) => {
 
 app.post('/api/requests/:id', requireAdmin, async (req, res) => {
   try {
+    console.log('Update request req.body:', req.body);
     const result = await updateRequestRecord(req.params.id, req.body);
     if (result && result.error) return res.status(result.statusCode || 400).json({ error: result.error });
     res.json(result);
@@ -590,6 +598,7 @@ app.post('/api/requests/:id', requireAdmin, async (req, res) => {
 
 app.put('/api/admin/requests/:id', requireAdmin, async (req, res) => {
   try {
+    console.log('Admin update request req.body:', req.body);
     const result = await updateRequestRecord(req.params.id, req.body);
     if (result && result.error) return res.status(result.statusCode || 400).json({ error: result.error });
     res.json(result);

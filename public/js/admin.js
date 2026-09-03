@@ -111,22 +111,20 @@
   let detailMap = null;
   let detailMarker = null;
 
-  function setFormValue(selectors, value) {
+  function setFormValue(selector, value) {
+    const field = el(selector);
+    if (!field) return;
     const normalized = value === null || value === undefined || value === '' ? '' : String(value);
-    selectors.forEach((selector) => {
-      const field = el(selector);
-      if (!field) return;
-      field.value = normalized;
-    });
+    field.value = normalized;
   }
 
   function populateRequestForm(r) {
     const request = r || {};
     const quotedValue = request.quoted_price === null || request.quoted_price === undefined || request.quoted_price === '' ? '' : request.quoted_price;
     const finalValue = request.final_price === null || request.final_price === undefined || request.final_price === '' ? '' : request.final_price;
-    setFormValue(['#statusSelect', '#d-status'], request.status || '');
-    setFormValue(['#quotedPriceInput', '#d-quoted'], quotedValue);
-    setFormValue(['#finalPriceInput', '#d-final'], finalValue);
+    setFormValue('#statusSelect', request.status || '');
+    setFormValue('#quotedPriceInput', quotedValue);
+    setFormValue('#finalPriceInput', finalValue);
   }
 
   function renderLocationMap(requestData) {
@@ -207,17 +205,9 @@
   }
 
   el('#d-save').addEventListener('click', async () => {
-    const readInputValue = (selectors) => {
-      for (const selector of selectors) {
-        const field = el(selector);
-        if (field && field.value !== '') return field.value;
-      }
-      return '';
-    };
-
-    const statusValue = readInputValue(['#statusSelect', '#d-status']);
-    const quotedValue = readInputValue(['#quotedPriceInput', '#d-quoted']);
-    const finalValue = readInputValue(['#finalPriceInput', '#d-final']);
+    const statusValue = el('#statusSelect') ? el('#statusSelect').value : '';
+    const quotedValue = el('#quotedPriceInput') ? el('#quotedPriceInput').value : '';
+    const finalValue = el('#finalPriceInput') ? el('#finalPriceInput').value : '';
 
     const payload = {
       status: statusValue || undefined,
@@ -225,9 +215,16 @@
       final_price: finalValue === '' ? null : Number(finalValue)
     };
 
-    await fetch(`/api/requests/${currentDetailId}`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+    console.log('Saving payload:', payload);
+
+    const response = await fetch(`/api/requests/${currentDetailId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
+    const result = await response.json();
+    console.log('Save response:', result);
+
     await openDetail(currentDetailId);
     el('#d-save').textContent = 'Saxlanıldı ✓';
     setTimeout(() => el('#d-save').textContent = 'Yadda saxla', 1500);

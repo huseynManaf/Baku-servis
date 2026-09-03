@@ -385,18 +385,21 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   function renderTrackResult(data) {
-    el('#track-result').style.display = 'block';
-    el('#tr-service').textContent = data.device_info || 'Müraciətiniz';
-    el('#tr-device').textContent = data.problem_description || '';
+    const request = data && data.request ? data.request : data;
+    if (!request) return;
 
-    const statusValue = String(data.status || 'yeni').trim();
+    el('#track-result').style.display = 'block';
+    el('#tr-service').textContent = request.device_info || 'Müraciətiniz';
+    el('#tr-device').textContent = request.problem_description || '';
+
+    const statusValue = String(request.status || 'yeni').trim();
     const chip = el('#tr-status');
     chip.className = 'status-chip status-' + statusValue;
     chip.textContent = statusLabel(statusValue);
 
-    const proposedPrice = data.quoted_price !== null && data.quoted_price !== undefined && data.quoted_price !== '' ? Number(data.quoted_price) : null;
-    const finalPrice = data.final_price !== null && data.final_price !== undefined && data.final_price !== '' ? Number(data.final_price) : null;
-    const hasPrice = (value) => value !== null && value !== undefined && value !== '' && Number(value) !== 0 && !Number.isNaN(Number(value));
+    const proposedPrice = request.quoted_price !== null && request.quoted_price !== undefined && request.quoted_price !== '' ? Number(request.quoted_price) : null;
+    const finalPrice = request.final_price !== null && request.final_price !== undefined && request.final_price !== '' ? Number(request.final_price) : null;
+    const hasPrice = (value) => value !== null && value !== undefined && value !== '' && Number(value) > 0 && !Number.isNaN(Number(value));
     const resolvedPrice = hasPrice(finalPrice) ? finalPrice : (hasPrice(proposedPrice) ? proposedPrice : null);
 
     if (resolvedPrice !== null) {
@@ -406,14 +409,14 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     const payBtn = el('#pay-btn');
-    if (resolvedPrice !== null && !data.is_paid) {
+    if (resolvedPrice !== null && !request.is_paid) {
       payBtn.style.display = 'inline-flex';
       payBtn.onclick = async () => {
         payBtn.disabled = true; payBtn.textContent = 'Ödəniş edilir...';
-        const { ok, status, body: rd } = await doFetch(`/api/requests/${data.id}/pay`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: currentTrack.code, phone: currentTrack.phone, method: 'card' }) });
+        const { ok, status, body: rd } = await doFetch(`/api/requests/${request.id}/pay`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: currentTrack.code, phone: currentTrack.phone, method: 'card' }) });
         if (ok) {
           payBtn.textContent = 'Ödənildi ✓';
-          data.is_paid = 1;
+          request.is_paid = 1;
         } else {
           showToast('error', (rd && (rd.error || rd.details)) || `Ödəniş xətası (${status})`);
           payBtn.disabled = false; payBtn.textContent = 'Kartla ödə (demo)';
