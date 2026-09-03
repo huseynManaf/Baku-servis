@@ -111,6 +111,11 @@
   let detailMap = null;
   let detailMarker = null;
 
+  const statusSelect = document.getElementById('statusSelect') || document.getElementById('d-status');
+  const quotedPriceInput = document.getElementById('quotedPriceInput') || document.getElementById('d-quoted');
+  const finalPriceInput = document.getElementById('finalPriceInput') || document.getElementById('d-final');
+  const saveButton = document.getElementById('d-save');
+
   function setFormValue(selector, value) {
     const field = el(selector);
     if (!field) return;
@@ -125,6 +130,9 @@
     setFormValue('#statusSelect', request.status || '');
     setFormValue('#quotedPriceInput', quotedValue);
     setFormValue('#finalPriceInput', finalValue);
+    if (statusSelect) statusSelect.value = request.status || '';
+    if (quotedPriceInput) quotedPriceInput.value = quotedValue;
+    if (finalPriceInput) finalPriceInput.value = finalValue;
   }
 
   function renderLocationMap(requestData) {
@@ -204,15 +212,15 @@
     renderDetailChat(fresh.messages);
   }
 
-  el('#d-save').addEventListener('click', async () => {
-    const statusValue = el('#statusSelect') ? el('#statusSelect').value : '';
-    const quotedValue = el('#quotedPriceInput') ? el('#quotedPriceInput').value : '';
-    const finalValue = el('#finalPriceInput') ? el('#finalPriceInput').value : '';
+  saveButton.addEventListener('click', async () => {
+    const currentStatus = statusSelect ? statusSelect.value : '';
+    const currentQuotedPrice = quotedPriceInput ? quotedPriceInput.value : '';
+    const currentFinalPrice = finalPriceInput ? finalPriceInput.value : '';
 
     const payload = {
-      status: statusValue || undefined,
-      quoted_price: quotedValue === '' ? null : Number(quotedValue),
-      final_price: finalValue === '' ? null : Number(finalValue)
+      status: currentStatus || undefined,
+      quoted_price: currentQuotedPrice === '' ? null : currentQuotedPrice,
+      final_price: currentFinalPrice === '' ? null : currentFinalPrice
     };
 
     console.log('Saving payload:', payload);
@@ -223,11 +231,17 @@
       body: JSON.stringify(payload)
     });
     const result = await response.json();
+    const updated = result && result.request ? result.request : result;
     console.log('Save response:', result);
 
-    await openDetail(currentDetailId);
-    el('#d-save').textContent = 'Saxlanıldı ✓';
-    setTimeout(() => el('#d-save').textContent = 'Yadda saxla', 1500);
+    if (statusSelect) statusSelect.value = updated && updated.status ? updated.status : currentStatus;
+    if (quotedPriceInput) quotedPriceInput.value = updated && updated.quoted_price !== null && updated.quoted_price !== undefined && updated.quoted_price !== '' ? updated.quoted_price : currentQuotedPrice;
+    if (finalPriceInput) finalPriceInput.value = updated && updated.final_price !== null && updated.final_price !== undefined && updated.final_price !== '' ? updated.final_price : currentFinalPrice;
+
+    if (saveButton) saveButton.textContent = 'Saxlanıldı ✓';
+    setTimeout(() => {
+      if (saveButton) saveButton.textContent = 'Yadda saxla';
+    }, 1500);
   });
 
   // ---------- Services CRUD ----------

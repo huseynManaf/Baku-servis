@@ -542,6 +542,14 @@ app.get('/api/admin/requests/:id', requireAdmin, async (req, res) => {
   }
 });
 
+function normalizeMoneyValue(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const str = String(value).trim().replace(/\s+/g, '').replace(',', '.');
+  if (str === '') return null;
+  const parsed = Number(str);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 async function updateRequestRecord(requestId, payload) {
   const { status, quoted_price, final_price } = payload || {};
   const reqRes = await db.query('SELECT * FROM requests WHERE id = $1', [requestId]);
@@ -551,8 +559,10 @@ async function updateRequestRecord(requestId, payload) {
   }
 
   const statusValue = status !== undefined && status !== null && status !== '' ? status : previousRow.status;
-  const quotedValue = quoted_price !== undefined && quoted_price !== null && quoted_price !== '' ? Number(quoted_price) : previousRow.quoted_price;
-  const finalValue = final_price !== undefined && final_price !== null && final_price !== '' ? Number(final_price) : previousRow.final_price;
+  const quotedValueRaw = quoted_price === undefined ? previousRow.quoted_price : normalizeMoneyValue(quoted_price);
+  const finalValueRaw = final_price === undefined ? previousRow.final_price : normalizeMoneyValue(final_price);
+  const quotedValue = quotedValueRaw !== null && quotedValueRaw !== undefined ? Number(quotedValueRaw) : null;
+  const finalValue = finalValueRaw !== null && finalValueRaw !== undefined ? Number(finalValueRaw) : null;
 
   const isPg = !!(db && db.pool);
   const sql = isPg

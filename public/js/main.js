@@ -397,10 +397,10 @@ document.addEventListener('DOMContentLoaded', function () {
     chip.className = 'status-chip status-' + statusValue;
     chip.textContent = statusLabel(statusValue);
 
-    const proposedPrice = request.quoted_price !== null && request.quoted_price !== undefined && request.quoted_price !== '' ? Number(request.quoted_price) : null;
     const finalPrice = request.final_price !== null && request.final_price !== undefined && request.final_price !== '' ? Number(request.final_price) : null;
+    const quotedPrice = request.quoted_price !== null && request.quoted_price !== undefined && request.quoted_price !== '' ? Number(request.quoted_price) : null;
     const hasPrice = (value) => value !== null && value !== undefined && value !== '' && Number(value) > 0 && !Number.isNaN(Number(value));
-    const resolvedPrice = hasPrice(finalPrice) ? finalPrice : (hasPrice(proposedPrice) ? proposedPrice : null);
+    const resolvedPrice = hasPrice(finalPrice) ? finalPrice : (hasPrice(quotedPrice) ? quotedPrice : null);
 
     if (resolvedPrice !== null) {
       el('#tr-price').textContent = `${resolvedPrice} ₼`;
