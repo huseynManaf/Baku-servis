@@ -215,9 +215,21 @@
     serviceCards.querySelectorAll('[data-service-name]').forEach((button) => {
       button.addEventListener('click', () => {
         const name = button.dataset.serviceName;
+        const orderSection = document.querySelector('#order-section');
+        const firstNameInput = document.getElementById('customer_name');
+
         if (serviceSelect) {
           serviceSelect.value = name;
-          serviceSelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        if (orderSection) {
+          orderSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        if (firstNameInput) {
+          setTimeout(() => {
+            firstNameInput.focus({ preventScroll: true });
+          }, 220);
         }
       });
     });

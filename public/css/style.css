@@ -65,7 +65,7 @@ body[data-theme="light"] .stat-card {
   box-shadow: var(--shadow-soft);
 }
 
-*{box-sizing:border-box;}
+*, *::before, *::after { box-sizing: border-box; }
 html, body {
   width: 100%;
   max-width: 100vw !important;
@@ -350,7 +350,7 @@ footer{border-top:1px solid var(--line);padding:44px 0;}
     border-radius:20px;
     white-space:nowrap;
     font-size:0.85rem;
-    max-width:128px;
+    max-width:180px;
     overflow:hidden;
     text-overflow:ellipsis;
     font-weight:600;
@@ -385,6 +385,29 @@ footer{border-top:1px solid var(--line);padding:44px 0;}
   .step,
   .svc-card,
   .modal{width:100%;}
+  .form-card{
+    width:100% !important;
+    max-width:100%;
+    margin:0 auto;
+    padding:16px;
+    box-sizing:border-box;
+  }
+  .field input,
+  .field select,
+  .field textarea,
+  .field .map-search-row input,
+  .field .map-search-row button,
+  .modal .field input,
+  .modal .field select,
+  .modal .field textarea{
+    width:100%;
+    display:block;
+    box-sizing:border-box;
+    max-width:100%;
+  }
+  .map-search-row{display:flex;gap:8px;align-items:center;}
+  .map-search-row input{flex:1 1 auto;min-width:0;}
+  .map-search-row button{flex:0 0 auto;}
   .floating-actions{right:16px;bottom:16px;gap:10px;z-index:9999;}
   .chat-toggle-btn{padding:10px 12px;font-size:12px;}
   .chat-toggle-btn-text{display:none;}
