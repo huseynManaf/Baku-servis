@@ -20,11 +20,13 @@
   const paymentModal = document.getElementById('payment-modal');
   const closePaymentModal = document.getElementById('close-payment-modal');
   const paymentForm = document.getElementById('payment-form');
+  const paymentMethodSelect = document.getElementById('payment_method');
   const cardNumberInput = document.getElementById('card-number');
   const cardExpiryInput = document.getElementById('card-expiry');
   const cardCvcInput = document.getElementById('card-cvc');
   const cardBrandBadge = document.getElementById('card-brand-badge');
   const themeToggle = document.getElementById('theme-toggle');
+  const resultPaymentMethod = document.getElementById('result-payment-method');
   let activeTrackingId = null;
 
   const onsiteToggle = document.getElementById('is_onsite');
@@ -68,6 +70,10 @@
     root.classList.toggle('theme-light', resolved === 'theme-light');
     if (themeToggle) themeToggle.textContent = theme === 'light' ? 'Dark' : 'Light';
     localStorage.setItem('hugu-theme', theme);
+  }
+
+  function isWithinAzerbaijan(lat, lng) {
+    return Number(lat) >= 38.3 && Number(lat) <= 41.9 && Number(lng) >= 44.7 && Number(lng) <= 50.9;
   }
 
   function showToast(message, type = 'error') {
@@ -161,6 +167,11 @@
     )).join('');
   }
 
+  function getServiceBadge(service) {
+    const value = String(service?.category || service?.name || 'SERVICE').toUpperCase();
+    return value.replace(/\s+/g, '_').slice(0, 18);
+  }
+
   function renderServiceCards(services) {
     if (!serviceCards) return;
     if (!Array.isArray(services) || !services.length) {
@@ -170,12 +181,12 @@
 
     serviceCards.innerHTML = services.map((service) => `
       <article class="svc-card">
+        <div class="svc-tag">${getServiceBadge(service)}</div>
         <div class="svc-cat">${service.category || 'Genel'}</div>
         <h3>${service.name}</h3>
         <p>Peşəkar texniki yardım, dəqiq qiymətləndirmə və sürətli status izləmə.</p>
         <div class="svc-price-row">
           <span class="svc-price">${Number(service.price || 0).toFixed(2)} ₼</span>
-          <span class="svc-price-old">Başlanğıc qiymət</span>
         </div>
         <button type="button" class="btn btn-primary btn-sm svc-pick" data-service-name="${service.name}">Seç</button>
       </article>
@@ -219,6 +230,11 @@
 
       onSiteMap.on('click', async (event) => {
         const { lat, lng } = event.latlng;
+        if (!isWithinAzerbaijan(lat, lng)) {
+          showToast('Azerbaycan hüdudları xaricində yerləşən ünvan seçilə bilməz.', 'error');
+          return;
+        }
+
         if (onSiteMarker) {
           onSiteMarker.setLatLng([lat, lng]);
         } else {
@@ -266,6 +282,12 @@
         const place = result[0];
         const lat = Number(place.lat);
         const lng = Number(place.lon);
+
+        if (!isWithinAzerbaijan(lat, lng)) {
+          showToast('Azerbaycan hüdudları içində ünvan seçin.', 'error');
+          return;
+        }
+
         onsiteAddressInput.value = place.display_name;
         onsiteLatInput.value = String(lat);
         onsiteLngInput.value = String(lng);
@@ -359,6 +381,7 @@
       service_name: serviceSelect ? serviceSelect.value : '',
       device_info: document.getElementById('device_info').value.trim(),
       is_onsite: isOnsite,
+      payment_method: paymentMethodSelect ? paymentMethodSelect.value : 'later',
       address: onsiteAddressInput ? onsiteAddressInput.value.trim() : '',
       latitude: onsiteLatInput ? Number(onsiteLatInput.value || 0) : 0,
       longitude: onsiteLngInput ? Number(onsiteLngInput.value || 0) : 0
@@ -393,7 +416,13 @@
       if (onsiteAddressInput) onsiteAddressInput.value = '';
       if (onsiteLatInput) onsiteLatInput.value = '';
       if (onsiteLngInput) onsiteLngInput.value = '';
+      if (paymentMethodSelect) paymentMethodSelect.value = 'prepay';
       setMessage(`Müraciət yarandı. İzləmə kodu: ${body.tracking_code} · ${body.created_at}`, 'success');
+
+      if (body.payment_method === 'prepay' && body.request_id) {
+        activeTrackingId = Number(body.request_id);
+        openPaymentModal();
+      }
     } catch (error) {
       console.error('requestForm error:', error);
       setMessage('Serverə qoşularkən xəta baş verdi.', 'error');
@@ -427,6 +456,7 @@
       resultUpdated.textContent = formatDate(request.updated_at);
       resultQuoted.textContent = `${Number(request.quoted_price || 0).toFixed(2)} ₼`;
       resultFinal.textContent = `${Number(request.final_price || 0).toFixed(2)} ₼`;
+      resultPaymentMethod.textContent = request.payment_method === 'prepay' ? 'Öncədən Ödəniş (Onlayn Kartla)' : 'Təmirdən / Təhvil Verildikdən Sonra Ödəniş';
       resultPaymentStatus.textContent = request.payment_status || 'Ödənilməyib';
 
       if (request.is_onsite && (request.address || request.latitude != null || request.longitude != null)) {
@@ -436,7 +466,7 @@
         resultAddressWrap.style.display = 'none';
       }
 
-      if (Number(request.final_price || 0) > 0 && (request.payment_status || 'Ödənilməyib') !== 'Ödənilib') {
+      if (request.payment_method === 'prepay' && Number(request.final_price || 0) > 0 && (request.payment_status || 'Ödənilməyib') !== 'Ödənilib' && (request.payment_status || 'Ödənilməyib') !== 'Təhvil Veriləndə Ödənəcək') {
         payButtonWrap.style.display = 'block';
       } else {
         payButtonWrap.style.display = 'none';

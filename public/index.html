@@ -6,7 +6,7 @@
     <title>HUGU Servis</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <link rel="stylesheet" href="css/style.css" />
     <style>
@@ -171,6 +171,14 @@
                 </div>
 
                 <div class="field">
+                  <label for="payment_method">Ödəniş üsulu</label>
+                  <select id="payment_method" name="payment_method" required>
+                    <option value="prepay">Öncədən Ödəniş (Onlayn Kartla)</option>
+                    <option value="later">Təmirdən / Təhvil Verildikdən Sonra Ödəniş</option>
+                  </select>
+                </div>
+
+                <div class="field">
                   <label class="checkbox-row">
                     <input id="is_onsite" name="is_onsite" type="checkbox" />
                     <span>Səyyar Xidmət (Ünvanda Təmir)</span>
@@ -216,8 +224,9 @@
 
                 <div class="meta" style="margin-top:16px;">Yaradılma: <span id="result-created">-</span></div>
                 <div class="meta" style="margin-top:8px;">Status yenilənmə: <span id="result-updated">-</span></div>
-                <div class="meta" style="margin-top:8px;">Təklif olunan qiymət: <span id="result-quoted">-</span></div>
-                <div class="meta" style="margin-top:8px;">Son qiymət: <span id="result-final">-</span></div>
+                <div class="meta" style="margin-top:8px;">İlkin / Təklif Olunan Qiymət (₼): <span id="result-quoted">-</span></div>
+                <div class="meta" style="margin-top:8px;">Yekun Ödəniləcək Qiymət (₼): <span id="result-final">-</span></div>
+                <div class="meta" style="margin-top:8px;">Ödəniş üsulu: <span id="result-payment-method">-</span></div>
                 <div class="meta" style="margin-top:8px;">Ödəniş statusu: <span id="result-payment-status">-</span></div>
                 <div id="result-address-wrap" class="meta" style="margin-top:8px; display:none;">Ünvan: <span id="result-address">-</span></div>
                 <div id="pay-button-wrap" style="display:none; margin-top: 14px;">

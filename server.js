@@ -101,6 +101,7 @@ async function ensureDatabase() {
       address TEXT,
       latitude REAL,
       longitude REAL,
+      payment_method TEXT NOT NULL DEFAULT 'later',
       payment_status TEXT NOT NULL DEFAULT 'Ödənilməyib',
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -118,7 +119,7 @@ async function ensureDatabase() {
   `);
 
   const requestColumns = new Set((await all('PRAGMA table_info(requests)')).map((col) => col.name));
-  const requestColumnsToAdd = ['is_onsite', 'address', 'latitude', 'longitude', 'payment_status'];
+  const requestColumnsToAdd = ['is_onsite', 'address', 'latitude', 'longitude', 'payment_method', 'payment_status'];
   for (const column of requestColumnsToAdd) {
     if (!requestColumns.has(column)) {
       const typeMap = {
@@ -126,6 +127,7 @@ async function ensureDatabase() {
         address: 'TEXT',
         latitude: 'REAL',
         longitude: 'REAL',
+        payment_method: "TEXT NOT NULL DEFAULT 'later'",
         payment_status: "TEXT NOT NULL DEFAULT 'Ödənilməyib'"
       };
       await run(`ALTER TABLE requests ADD COLUMN ${column} ${typeMap[column]}`);
@@ -298,6 +300,10 @@ app.post('/api/requests', async (req, res) => {
     const address = String(req.body.address || '').trim();
     const latitude = Number(req.body.latitude || 0);
     const longitude = Number(req.body.longitude || 0);
+    const paymentMethod = String(req.body.payment_method || 'later').trim().toLowerCase();
+    const normalizedPaymentMethod = ['prepay', 'later', 'öncədən', 'sonradan', 'onlayn', 'laterpay'].includes(paymentMethod)
+      ? (paymentMethod === 'prepay' || paymentMethod === 'öncədən' || paymentMethod === 'onlayn' ? 'prepay' : 'later')
+      : 'later';
 
     if (is_onsite && (!address || !Number.isFinite(latitude) || !Number.isFinite(longitude))) {
       return res.status(400).json({ error: 'Səyyar xidmət üçün ünvan və xəritə koordinatları mütləqdir.' });
@@ -305,15 +311,18 @@ app.post('/api/requests', async (req, res) => {
 
     const tracking_code = generateTrackingCode();
     const timestamp = nowIso();
+    const paymentStatus = normalizedPaymentMethod === 'prepay' ? 'Ödənilməyib' : 'Təhvil Veriləndə Ödənəcək';
     const result = await run(`
-      INSERT INTO requests (tracking_code, customer_name, customer_phone, service_name, device_info, status, quoted_price, final_price, is_onsite, address, latitude, longitude, payment_status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [tracking_code, customer_name, customer_phone, service_name, device_info || null, 'Gözləmədə', 0, 0, is_onsite ? 1 : 0, address || null, Number.isFinite(latitude) ? latitude : null, Number.isFinite(longitude) ? longitude : null, 'Ödənilməyib', timestamp, timestamp]);
+      INSERT INTO requests (tracking_code, customer_name, customer_phone, service_name, device_info, status, quoted_price, final_price, is_onsite, address, latitude, longitude, payment_method, payment_status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [tracking_code, customer_name, customer_phone, service_name, device_info || null, 'Gözləmədə', 0, 0, is_onsite ? 1 : 0, address || null, Number.isFinite(latitude) ? latitude : null, Number.isFinite(longitude) ? longitude : null, normalizedPaymentMethod, paymentStatus, timestamp, timestamp]);
 
     return res.status(201).json({
       ok: true,
       request_id: result.lastInsertRowid,
       tracking_code,
+      payment_method: normalizedPaymentMethod,
+      payment_status: paymentStatus,
       created_at: formatDate(timestamp),
       status: 'Gözləmədə'
     });
@@ -344,6 +353,7 @@ app.get('/api/requests/track/:code', async (req, res) => {
         status: row.status,
         quoted_price: Number(row.quoted_price || 0),
         final_price: Number(row.final_price || 0),
+        payment_method: row.payment_method || 'later',
         payment_status: row.payment_status || 'Ödənilməyib',
         is_onsite: Boolean(row.is_onsite),
         address: row.address || '',
@@ -368,6 +378,7 @@ app.get('/api/admin/requests', requireAdmin, async (req, res) => {
       ...row,
       quoted_price: Number(row.quoted_price || 0),
       final_price: Number(row.final_price || 0),
+      payment_method: row.payment_method || 'later',
       payment_status: row.payment_status || 'Ödənilməyib',
       is_onsite: Boolean(row.is_onsite),
       latitude: row.latitude != null ? Number(row.latitude) : null,
@@ -399,12 +410,14 @@ app.put('/api/admin/requests/:id', requireAdmin, async (req, res) => {
     const quoted_price = Number(req.body.quoted_price || 0);
     const final_price = Number(req.body.final_price || 0);
     const payment_status = String(req.body.payment_status || 'Ödənilməyib').trim();
+    const payment_method = String(req.body.payment_method || 'later').trim().toLowerCase();
+    const normalizedPaymentMethod = payment_method === 'prepay' ? 'prepay' : 'later';
 
     await run(`
       UPDATE requests
-      SET status = ?, quoted_price = ?, final_price = ?, payment_status = ?, updated_at = ?
+      SET status = ?, quoted_price = ?, final_price = ?, payment_method = ?, payment_status = ?, updated_at = ?
       WHERE id = ?
-    `, [status, quoted_price, final_price, payment_status, nowIso(), id]);
+    `, [status, quoted_price, final_price, normalizedPaymentMethod, payment_status, nowIso(), id]);
 
     const row = await get('SELECT * FROM requests WHERE id = ?', [id]);
     return res.json({ ok: true, updated: row });
