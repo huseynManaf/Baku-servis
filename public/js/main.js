@@ -369,14 +369,27 @@ document.addEventListener('DOMContentLoaded', function () {
       yeni: 'Yeni', baxilir: 'Baxılır', qiymetlendirildi: 'Qiymətləndirildi',
       icrada: 'İcrada', hazir: 'Hazırdır', teslim: 'Təhvil verilib', legv: 'Ləğv edilib'
     };
-    return map[s] || s;
+    return map[String(s || '').trim()] || String(s || 'Yeni');
+  }
+
+  function formatMessageTime(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString('az-AZ', {
+      hour: '2-digit',
+      minute: '2-digit',
+      day: '2-digit',
+      month: '2-digit'
+    });
   }
 
   function renderTrackResult(data) {
     el('#track-result').style.display = 'block';
     el('#tr-service').textContent = data.device_info || 'Müraciətiniz';
     el('#tr-device').textContent = data.problem_description || '';
-    const statusValue = data.status || 'yeni';
+
+    const statusValue = String(data.status || 'yeni').trim();
     const chip = el('#tr-status');
     chip.className = 'status-chip status-' + statusValue;
     chip.textContent = statusLabel(statusValue);
@@ -385,9 +398,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const finalPrice = data.final_price !== null && data.final_price !== undefined ? Number(data.final_price) : null;
     const price = finalPrice ?? proposedPrice;
 
-    if (finalPrice !== null && finalPrice !== undefined) {
+    if (finalPrice !== null && finalPrice !== undefined && !Number.isNaN(finalPrice)) {
       el('#tr-price').textContent = `${finalPrice} ₼`;
-    } else if (proposedPrice !== null && proposedPrice !== undefined) {
+    } else if (proposedPrice !== null && proposedPrice !== undefined && !Number.isNaN(proposedPrice)) {
       el('#tr-price').textContent = `${proposedPrice} ₼`;
     } else {
       el('#tr-price').textContent = 'Qiymət gözlənilir';
@@ -418,12 +431,15 @@ document.addEventListener('DOMContentLoaded', function () {
     const { ok, status, body: msgs } = await doFetch(`/api/requests/${currentTrack.id}/messages?code=${encodeURIComponent(currentTrack.code)}&phone=${encodeURIComponent(currentTrack.phone)}`);
     if (!ok) return;
     const log = el('#chat-log');
-    log.innerHTML = msgs.map(m => `
-      <div class="msg ${m.sender}">
-        ${escapeHtml(m.body)}
-        <time>${new Date(m.created_at + 'Z').toLocaleString('az-AZ', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</time>
-      </div>
-    `).join('');
+    log.innerHTML = (msgs || []).map(m => {
+      const timeText = formatMessageTime(m.created_at);
+      return `
+        <div class="msg ${m.sender}">
+          ${escapeHtml(m.body)}
+          ${timeText ? `<time>${timeText}</time>` : ''}
+        </div>
+      `;
+    }).join('');
     log.scrollTop = log.scrollHeight;
   }
 

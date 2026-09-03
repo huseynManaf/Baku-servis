@@ -365,9 +365,9 @@ app.get('/api/requests/track', async (req, res) => {
 
     const latest = {
       ...row,
-      status: row.status || 'yeni',
-      quoted_price: row.quoted_price !== null && row.quoted_price !== undefined ? Number(row.quoted_price) : null,
-      final_price: row.final_price !== null && row.final_price !== undefined ? Number(row.final_price) : null,
+      status: row.status || row.request_status || 'yeni',
+      quoted_price: row.quoted_price !== null && row.quoted_price !== undefined ? Number(row.quoted_price) : (row.quotedPrice !== null && row.quotedPrice !== undefined ? Number(row.quotedPrice) : null),
+      final_price: row.final_price !== null && row.final_price !== undefined ? Number(row.final_price) : (row.finalPrice !== null && row.finalPrice !== undefined ? Number(row.finalPrice) : null),
       is_paid: Boolean(row.is_paid)
     };
 
