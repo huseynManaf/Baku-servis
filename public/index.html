@@ -48,7 +48,10 @@
         </div>
 
         <div class="nav-cta">
-          <a href="tel:+994707164142" class="tel-badge">+994 70 716 41 42</a>
+          <a href="tel:+994707164142" class="tel-badge" aria-label="Telefonla zəng et">
+            <span class="tel-icon" aria-hidden="true">📞</span>
+            <span>070 716 41 42</span>
+          </a>
           <button type="button" class="btn btn-outline btn-sm theme-toggle" id="theme-toggle" aria-label="Tema dəyişdir">Light</button>
         </div>
       </div>
@@ -152,34 +155,34 @@
               <form id="request-form" novalidate>
                 <div class="field">
                   <label for="customer_name">Ad və soyad</label>
-                  <input id="customer_name" name="customer_name" type="text" placeholder="Məs: Elvin Məmmədov" required />
+                  <input id="customer_name" name="customer_name" type="text" placeholder="Məs: Elvin Məmmədov" required autocomplete="name" aria-label="Müştəri adı" />
                 </div>
 
                 <div class="field">
                   <label for="customer_phone">Telefon</label>
-                  <input id="customer_phone" name="customer_phone" type="tel" placeholder="050 123 45 67" required />
+                  <input id="customer_phone" name="customer_phone" type="tel" placeholder="050 123 45 67" required autocomplete="tel" aria-label="Telefon nömrəsi" />
                 </div>
 
                 <div class="field">
                   <label for="service_name">Xidmət</label>
-                  <select id="service_name" class="service-select" name="service_name" required></select>
+                  <select id="service_name" class="service-select" name="service_name" required autocomplete="off" aria-label="Xidmət seçimi"></select>
                 </div>
 
                 <div class="field">
                   <label for="device_info">Cihaz məlumatı</label>
-                  <input id="device_info" name="device_info" type="text" placeholder="Məs: Lenovo ThinkPad, 8GB RAM" />
+                  <input id="device_info" name="device_info" type="text" placeholder="Məs: Lenovo ThinkPad, 8GB RAM" autocomplete="off" aria-label="Cihaz məlumatı" />
                 </div>
 
                 <div class="field">
                   <label for="payment_method">Ödəniş üsulu</label>
-                  <select id="payment_method" name="payment_method" required>
+                  <select id="payment_method" name="payment_method" required autocomplete="off" aria-label="Ödəniş üsulu">
                     <option value="prepay">Öncədən Ödəniş (Onlayn Kartla)</option>
                     <option value="later">Təmirdən / Təhvil Verildikdən Sonra Ödəniş</option>
                   </select>
                 </div>
 
                 <div class="field">
-                  <label class="checkbox-row">
+                  <label class="checkbox-row" for="is_onsite">
                     <input id="is_onsite" name="is_onsite" type="checkbox" />
                     <span>Səyyar Xidmət (Ünvanda Təmir)</span>
                   </label>
@@ -189,13 +192,15 @@
                   <div class="field">
                     <label for="onsite-address">Ünvan</label>
                     <div class="map-search-row">
-                      <input id="onsite-address" type="text" placeholder="Ünvanı yazın və axtarın" />
+                      <input id="onsite-address" type="text" placeholder="Ünvanı yazın və axtarın" autocomplete="street-address" aria-label="Ünvan" />
                       <button type="button" id="search-address-btn" class="btn btn-outline btn-sm">Axtar</button>
                     </div>
                   </div>
                   <div id="onsite-map"></div>
-                  <input id="onsite-latitude" type="hidden" />
-                  <input id="onsite-longitude" type="hidden" />
+                  <label for="onsite-latitude" class="sr-only">Enlem</label>
+                  <input id="onsite-latitude" type="hidden" aria-label="Enlem" />
+                  <label for="onsite-longitude" class="sr-only">Boylam</label>
+                  <input id="onsite-longitude" type="hidden" aria-label="Boylam" />
                 </div>
 
                 <button type="submit" class="btn btn-primary btn-block" style="margin-top: 16px;">Müraciəti göndər</button>
@@ -208,7 +213,7 @@
               <form id="track-form" novalidate>
                 <div class="field">
                   <label for="tracking_code">İzləmə kodu</label>
-                  <input id="tracking_code" type="text" placeholder="HG-ABCD12" required />
+                  <input id="tracking_code" type="text" placeholder="HG-ABCD12" required autocomplete="off" aria-label="İzləmə kodu" />
                 </div>
                 <button type="submit" class="btn btn-outline btn-block">Axtar</button>
               </form>
@@ -303,15 +308,15 @@
         <form id="payment-form">
           <div class="field">
             <label for="card-number">Kart nömrəsi</label>
-            <input id="card-number" type="text" inputmode="numeric" maxlength="19" placeholder="4242 4242 4242 4242" required />
+            <input id="card-number" type="text" inputmode="numeric" maxlength="19" placeholder="4242 4242 4242 4242" required autocomplete="cc-number" aria-label="Kart nömrəsi" />
           </div>
           <div class="field">
             <label for="card-expiry">Bitmə tarixi</label>
-            <input id="card-expiry" type="text" maxlength="5" placeholder="MM/YY" required />
+            <input id="card-expiry" type="text" maxlength="5" placeholder="MM/YY" required autocomplete="cc-exp" aria-label="Bitmə tarixi" />
           </div>
           <div class="field">
             <label for="card-cvc">CVC</label>
-            <input id="card-cvc" type="text" maxlength="4" inputmode="numeric" placeholder="123" required />
+            <input id="card-cvc" type="text" maxlength="4" inputmode="numeric" placeholder="123" required autocomplete="cc-csc" aria-label="CVC" />
           </div>
           <button type="submit" class="btn btn-primary btn-block">Ödənişi təsdiqlə</button>
         </form>
@@ -327,7 +332,8 @@
         </div>
         <div id="customer-chat-messages" class="chat-log"></div>
         <div class="chat-input-row">
-          <input id="customer-chat-input" type="text" placeholder="Mesaj yazın..." />
+          <label for="customer-chat-input" class="sr-only">Çat mesajı</label>
+          <input id="customer-chat-input" type="text" placeholder="Mesaj yazın..." autocomplete="off" aria-label="Çat mesajı" />
           <button id="customer-chat-send" class="btn btn-primary btn-sm" type="button">Göndər</button>
         </div>
       </div>

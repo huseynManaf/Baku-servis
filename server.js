@@ -45,12 +45,14 @@ function normalizeBotText(value) {
 function getIntentKeywords(text) {
   const greetingPattern = /(salam|salamlar|salam aleykum|aleykum salam|xos gorduk|xoş gəldiniz|mühəndis|mühendis)/;
   const courtesyPattern = /(necesiz|necesiniz|sağol|sagol|tesekkur|təshəkkür|teşekkür|ne var ne yox|ne var ne yox)/;
+  const printerPattern = /(printer|print|kartric|kartrij|cartirj|kartridj|kaput|cap|çap|çap)/;
   const formatPattern = /(format|windows|əməliyyat sistemi|emeliyyat sistemi|os|operating system|driver|drayver|quraşdırma|qurasdirma)/;
   const pricingPattern = /(qiymet|qiymət|qiyməti|pulla|kassa|neçədir|nece|qeder|nedir|deyer|dəyər)/;
   const trackingPattern = /(izleme|izləmə|status|sifaris|sifariş|kod|kodu|haradadir|haradadır|harada|sifarisin|statusu)/;
 
   if (greetingPattern.test(text)) return 'greeting';
   if (courtesyPattern.test(text)) return 'courtesy';
+  if (printerPattern.test(text)) return 'printer';
   if (formatPattern.test(text)) return 'format';
   if (pricingPattern.test(text)) return 'pricing';
   if (trackingPattern.test(text)) return 'tracking';
@@ -93,15 +95,19 @@ function getKnowledgeBaseReply(message, historyMessages = []) {
   }
 
   if (intent === 'greeting') {
-    return 'Salam! Hugu Servis İT Dəstək Mərkəzinə xoş gəlmisiniz. Sizə necə kömək edə bilərəm? 🛠️';
+    return 'Salam! Necəsiniz? Hugu Servis İT Dəstək Mərkəzinə xoş gəlmisiniz. Sizə necə kömək edə bilərəm? 🛠️';
   }
 
   if (intent === 'courtesy') {
-    return 'Çox sağ olun, təşəkkür edirəm, mən yaxşıyam! 😊 Siz necəsiniz? Kompüterinizdə və ya avadanlığınızda hər hansı texniki problem var?';
+    return 'Sağ olun, siz necəsiniz? 😊 Kompüterinizdə, printerinizdə və ya digər avadanlıqlarınızda hər hansı texniki problem var?';
+  }
+
+  if (intent === 'printer') {
+    return 'Printer servis xidmətlərimiz mövcuddur! Cihazı 20 ₼-yə tam diaqnostika edib yoxlayırıq, təmiri və detal dəyişimi qiymətini isə yoxladıqdan sonra sizinlə razılaşdırırıq. 🖨️';
   }
 
   if (intent === 'format') {
-    return 'Windows 10/11 formatı, lisenziyalı quraşdırma və bütün drayverlərin yazılması xidmətimiz var. Qiyməti ortalama 25.00 ₼ təşkil edir. Sifariş formundan müraciət edə bilərsiniz!';
+    return 'Windows 10/11 formatı, lisenziyalı quraşdırma və drayverlərin yazılması xidmətimiz var. Qiyməti ortalama 25 ₼ təşkil edir.';
   }
 
   if (intent === 'pricing') {
@@ -304,6 +310,25 @@ app.use(session({
 }));
 
 app.use(express.static(path.join(__dirname, 'public')));
+
+app.use((req, res, next) => {
+  const csp = [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com",
+    "font-src 'self' https://fonts.gstatic.com https://fonts.googleapis.com data:",
+    "img-src 'self' data: https: blob:",
+    "connect-src 'self' http://localhost:3000 https: ws: wss:",
+    "form-action 'self'",
+    "upgrade-insecure-requests"
+  ].join('; ');
+
+  res.setHeader('Content-Security-Policy', csp);
+  next();
+});
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));

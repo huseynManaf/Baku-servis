@@ -56,12 +56,12 @@
         <form id="login-form">
           <div class="field">
             <label for="username">İstifadəçi adı</label>
-            <input id="username" name="username" type="text" required />
+            <input id="username" name="username" type="text" required autocomplete="username" aria-label="İstifadəçi adı" />
           </div>
 
           <div class="field">
             <label for="password">Şifrə</label>
-            <input id="password" name="password" type="password" required />
+            <input id="password" name="password" type="password" required autocomplete="current-password" aria-label="Şifrə" />
           </div>
 
           <button type="submit" class="btn btn-primary btn-block">Daxil ol</button>
@@ -165,7 +165,8 @@
               <div class="admin-chat-header">Seçilmiş konversasiya</div>
               <div id="admin-chat-messages" class="admin-chat-messages"></div>
               <div class="chat-input-row" style="margin-top: 12px;">
-                <input id="admin-chat-input" type="text" placeholder="Mesaj yazın..." />
+                <label for="admin-chat-input" class="sr-only">Çat mesajı</label>
+                <input id="admin-chat-input" type="text" placeholder="Mesaj yazın..." autocomplete="off" aria-label="Çat mesajı" />
                 <button id="admin-chat-send" class="btn btn-primary btn-sm" type="button">Göndər</button>
               </div>
             </div>
@@ -178,33 +179,33 @@
               <h3>Müraciət məlumatı</h3>
 
               <div class="field">
-                <label>Kod</label>
-                <input id="detail-code" type="text" readonly />
+                <label for="detail-code">Kod</label>
+                <input id="detail-code" type="text" readonly autocomplete="off" aria-label="Kod" />
               </div>
 
               <div class="field">
-                <label>Müştəri</label>
-                <input id="detail-name" type="text" readonly />
+                <label for="detail-name">Müştəri</label>
+                <input id="detail-name" type="text" readonly autocomplete="name" aria-label="Müştəri" />
               </div>
 
               <div class="field">
-                <label>Telefon</label>
-                <input id="detail-phone" type="text" readonly />
+                <label for="detail-phone">Telefon</label>
+                <input id="detail-phone" type="text" readonly autocomplete="tel" aria-label="Telefon" />
               </div>
 
               <div class="field">
-                <label>Cihaz</label>
-                <input id="detail-device" type="text" readonly />
+                <label for="detail-device">Cihaz</label>
+                <input id="detail-device" type="text" readonly autocomplete="off" aria-label="Cihaz" />
               </div>
 
               <div class="field">
-                <label>Xidmət</label>
-                <input id="detail-service" type="text" readonly />
+                <label for="detail-service">Xidmət</label>
+                <input id="detail-service" type="text" readonly autocomplete="off" aria-label="Xidmət" />
               </div>
 
               <div class="field">
-                <label>Yaradılıb</label>
-                <input id="detail-created" type="text" readonly />
+                <label for="detail-created">Yaradılıb</label>
+                <input id="detail-created" type="text" readonly autocomplete="off" aria-label="Yaradılıb" />
               </div>
             </div>
 
@@ -212,8 +213,8 @@
               <h3>Status və qiymət</h3>
 
               <div class="field">
-                <label>Status</label>
-                <select id="detail-status">
+                <label for="detail-status">Status</label>
+                <select id="detail-status" aria-label="Status">
                   <option value="Gözləmədə">Gözləmədə</option>
                   <option value="Qiymətləndirildi">Qiymətləndirildi</option>
                   <option value="Hazırdır">Hazırdır</option>
@@ -223,26 +224,26 @@
               </div>
 
               <div class="field">
-                <label>Təklif olunan qiymət (₼)</label>
-                <input id="detail-quoted" type="number" step="0.01" min="0" />
+                <label for="detail-quoted">Təklif olunan qiymət (₼)</label>
+                <input id="detail-quoted" type="number" step="0.01" min="0" aria-label="Təklif olunan qiymət" />
               </div>
 
               <div class="field">
-                <label>Son qiymət (₼)</label>
-                <input id="detail-final" type="number" step="0.01" min="0" />
+                <label for="detail-final">Son qiymət (₼)</label>
+                <input id="detail-final" type="number" step="0.01" min="0" aria-label="Son qiymət" />
               </div>
 
               <div class="field">
-                <label>Ödəniş statusu</label>
-                <select id="detail-payment-status">
+                <label for="detail-payment-status">Ödəniş statusu</label>
+                <select id="detail-payment-status" aria-label="Ödəniş statusu">
                   <option value="Ödənilməyib">Ödənilməyib</option>
                   <option value="Ödənilib">Ödənilib</option>
                 </select>
               </div>
 
               <div id="detail-onsite-box" class="field" style="display:none;">
-                <label>Ünvan</label>
-                <input id="detail-address" type="text" readonly />
+                <label for="detail-address">Ünvan</label>
+                <input id="detail-address" type="text" readonly autocomplete="street-address" aria-label="Ünvan" />
                 <a id="detail-map-link" class="btn btn-outline btn-block" target="_blank" rel="noopener" href="#" style="margin-top: 8px;">Xəritədə Bax</a>
               </div>
 
@@ -259,18 +260,18 @@
         <h3 style="margin-top:0;">Yeni xidmət</h3>
         <form id="service-form">
           <div class="field">
-            <label>Xidmət adı</label>
-            <input id="service-name" name="name" type="text" required />
+            <label for="service-name">Xidmət adı</label>
+            <input id="service-name" name="name" type="text" required autocomplete="off" aria-label="Xidmət adı" />
           </div>
 
           <div class="field">
-            <label>Kateqoriya</label>
-            <input id="service-category" name="category" type="text" placeholder="Laptop, Komputer, Hardware" />
+            <label for="service-category">Kateqoriya</label>
+            <input id="service-category" name="category" type="text" placeholder="Laptop, Komputer, Hardware" autocomplete="off" aria-label="Kateqoriya" />
           </div>
 
           <div class="field">
-            <label>Qiymət (₼)</label>
-            <input id="service-price" name="price" type="number" step="0.01" min="0" placeholder="15.00" />
+            <label for="service-price">Qiymət (₼)</label>
+            <input id="service-price" name="price" type="number" step="0.01" min="0" placeholder="15.00" autocomplete="off" aria-label="Qiymət" />
           </div>
 
           <div style="display:flex; gap:10px;">
