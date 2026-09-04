@@ -34,6 +34,7 @@
   const payLaterBtn = document.getElementById('pay-later-btn');
   const liveBoard = document.getElementById('live-board');
   let activeTrackingId = null;
+  const AZERBAIJANI_PHONE_REGEX = /^(?:\+?994|0)?\s?(?:50|51|55|70|77|99|10|60)\s?\d{3}\s?\d{2}\s?\d{2}$/;
 
   const onsiteToggle = document.getElementById('is_onsite');
   const onsiteMapWrap = document.getElementById('onsite-map-wrap');
@@ -71,14 +72,25 @@
   }
 
   function sanitizePhone(value) {
-    const digits = String(value || '').replace(/\D/g, '');
+    const raw = String(value || '').trim();
+    const hasLeadingPlus = raw.startsWith('+');
+    const digits = raw.replace(/\D/g, '');
+    return hasLeadingPlus ? `+${digits}` : digits;
+  }
+
+  function isValidAzerbaijaniPhone(value) {
+    return AZERBAIJANI_PHONE_REGEX.test(sanitizePhone(value));
+  }
+
+  function normalizePhone(value) {
+    const digits = sanitizePhone(value).replace(/\D/g, '');
     if (!digits) return '';
     const withoutCountry = digits.startsWith('994') ? digits.slice(3) : digits;
-    return withoutCountry.replace(/^0+/, '').slice(0, 9);
+    return withoutCountry.replace(/^0+/, '');
   }
 
   function formatPhoneValue(value) {
-    const digits = sanitizePhone(value);
+    const digits = normalizePhone(value);
     if (!digits) return '';
     if (digits.length <= 2) return `+994 ${digits}`;
     if (digits.length <= 5) return `+994 ${digits.slice(0, 2)} ${digits.slice(2)}`;
@@ -556,19 +568,16 @@
 
   customerPhoneInput?.addEventListener('input', () => {
     const sanitized = sanitizePhone(customerPhoneInput.value);
-    const formatted = formatPhoneValue(sanitized);
-    customerPhoneInput.value = formatted;
-    customerPhoneInput.setCustomValidity(sanitized.length === 9 ? '' : 'Mobil nömrə 9 rəqəmli olmalıdır.');
+    customerPhoneInput.value = sanitized;
+    customerPhoneInput.setCustomValidity(isValidAzerbaijaniPhone(sanitized) ? '' : 'Düzgün Azərbaycan mobil nömrəsi daxil edin.');
   });
 
-  function formatPhoneValue(value) {
-    const digits = sanitizePhone(value);
-    if (!digits) return '';
-    if (digits.length <= 2) return `+994 ${digits}`;
-    if (digits.length <= 5) return `+994 ${digits.slice(0, 2)} ${digits.slice(2)}`;
-    if (digits.length <= 7) return `+994 ${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5)}`;
-    return `+994 ${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5, 7)} ${digits.slice(7, 9)}`;
-  }
+  customerPhoneInput?.addEventListener('blur', () => {
+    const sanitized = sanitizePhone(customerPhoneInput.value);
+    if (isValidAzerbaijaniPhone(sanitized)) {
+      customerPhoneInput.value = formatPhoneValue(sanitized);
+    }
+  });
 
   paymentForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -608,7 +617,8 @@
     event.preventDefault();
 
     const isOnsite = Boolean(onsiteToggle && onsiteToggle.checked);
-    const customerPhone = sanitizePhone(document.getElementById('customer_phone').value);
+    const submittedPhone = sanitizePhone(document.getElementById('customer_phone').value);
+    const customerPhone = normalizePhone(submittedPhone);
     const payload = {
       customer_name: document.getElementById('customer_name').value.trim(),
       customer_phone: customerPhone,
@@ -626,8 +636,8 @@
       return;
     }
 
-    if (payload.customer_phone.length !== 9) {
-      setMessage('Mobil nömrə düzgün yazılmalıdır. Məsələn: +994 50 123 45 67', 'error');
+    if (!isValidAzerbaijaniPhone(submittedPhone)) {
+      setMessage('Düzgün Azərbaycan mobil nömrəsi daxil edin. Məsələn: +994 50 123 45 67', 'error');
       return;
     }
 

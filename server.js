@@ -39,6 +39,7 @@ const SMTP_USER = process.env.SMTP_USER || process.env.EMAIL_USER || 'huseynmana
 const SMTP_PASS = process.env.SMTP_PASS || process.env.EMAIL_PASS || '';
 const MAIL_FROM = process.env.MAIL_FROM || 'Baku Servis <noreply@bakuservis.az>';
 const ADMIN_EMAIL = 'huseynmanafli844@gmail.com';
+const AZERBAIJANI_PHONE_REGEX = /^(?:\+?994|0)?\s?(?:50|51|55|70|77|99|10|60)\s?\d{3}\s?\d{2}\s?\d{2}$/;
 const SUPER_ADMIN_EMAIL_ALIASES = Array.from(new Set([
   ADMIN_USERNAME,
   'huseynmanfli844@gmail.com',
@@ -64,8 +65,19 @@ function formatDate(value) {
   return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+function sanitizePhoneInput(value) {
+  const raw = String(value || '').trim();
+  const hasLeadingPlus = raw.startsWith('+');
+  const digits = raw.replace(/\D/g, '');
+  return hasLeadingPlus ? `+${digits}` : digits;
+}
+
+function isValidAzerbaijaniPhone(value) {
+  return AZERBAIJANI_PHONE_REGEX.test(sanitizePhoneInput(value));
+}
+
 function normalizePhone(value) {
-  const digits = String(value || '').replace(/\D/g, '');
+  const digits = sanitizePhoneInput(value).replace(/\D/g, '');
   if (!digits) return '';
   const withoutCountry = digits.startsWith('994') ? digits.slice(3) : digits;
   const withoutZero = withoutCountry.replace(/^0+/, '');
@@ -758,7 +770,8 @@ app.get('/api/orders/live-board', async (req, res) => {
 app.post('/api/requests', async (req, res) => {
   try {
     const customer_name = String(req.body.customer_name || '').trim();
-    const customer_phone = String(req.body.customer_phone || '').trim();
+    const submittedPhone = sanitizePhoneInput(req.body.customer_phone || '');
+    const customer_phone = normalizePhone(submittedPhone);
     const service_name = String(req.body.service_name || '').trim();
     const device_info = String(req.body.device_info || '').trim();
     const device_model = String(req.body.device_model || device_info || '').trim();
@@ -766,6 +779,10 @@ app.post('/api/requests', async (req, res) => {
 
     if (!customer_name || !customer_phone || !service_name) {
       return res.status(400).json({ error: 'Ad, telefon və xidmət sahələri mütləqdir.' });
+    }
+
+    if (!isValidAzerbaijaniPhone(submittedPhone)) {
+      return res.status(400).json({ error: 'Düzgün Azərbaycan mobil nömrəsi daxil edin.' });
     }
 
     const serviceExists = await get('SELECT id FROM services WHERE LOWER(name) = LOWER(?)', [service_name]);
