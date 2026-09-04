@@ -1,12 +1,12 @@
 {
-  "name": "hugu-servis",
+  "name": "bakuservis",
   "version": "1.0.0",
-  "description": "HUGU Servis - IT / komputer texniki xidmet sifarish platformasi",
+  "description": "Baku Servis - professional phone, laptop and server repair platform",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "backup": "node scripts/backup.js",
-    "cap:init": "npx cap init \"Hugu Servis\" com.huguservis.app --web-dir=public",
+    "cap:init": "npx cap init \"Baku Servis\" com.bakuservis.app --web-dir=public",
     "cap:add-android": "npx cap add android",
     "cap:open-android": "npx cap open android",
     "cap:copy": "npx cap copy",

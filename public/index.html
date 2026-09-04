@@ -3,12 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>HUGU Servis</title>
+    <title>Baku Servis | Peşəkar Telefon, Noutbuk və Server Təmir Xidməti Bakıda</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230f172a'/><path d='M20 30h12v18h16V30h12v40H48V58H32v12H20V30zm48 20h20v8H76v4h8c4.4 0 8 3.6 8 8v4c0 4.4-3.6 8-8 8H68V30h24v10H76v10z' fill='%2338bdf8'/></svg>" />
+    <link rel="icon" type="image/svg+xml" href="logo.svg" />
     <link rel="stylesheet" href="css/style.css" />
     <style>
       body { background: #10141c; }
@@ -36,9 +36,9 @@
   <body>
     <nav class="nav">
       <div class="container">
-        <a href="#" class="brand" aria-label="HUGU Servis ana səhifə">
-          <span class="dot"></span>
-          HUGU SERVIS
+        <a href="#" class="brand" aria-label="Baku Servis ana səhifə">
+          <span class="brand-mark" aria-hidden="true"><img src="logo.svg" alt="" /></span>
+          <span class="brand-text">BAKU SERVIS</span>
         </a>
 
         <div class="nav-links">
@@ -48,11 +48,11 @@
         </div>
 
         <div class="nav-cta">
-          <a href="tel:+994707164142" class="tel-badge" aria-label="Telefonla zəng et">
+          <a href="#" class="tel-badge" data-tel="tel:+994707164142" aria-label="Telefonla zəng et">
             <span class="tel-icon" aria-hidden="true">📞</span>
             <span>+994 70 716 41 42</span>
           </a>
-          <button type="button" class="btn btn-outline btn-sm theme-toggle" id="theme-toggle" aria-label="Tema dəyişdir">Light</button>
+          <button type="button" class="btn btn-outline btn-sm theme-toggle" id="theme-toggle" aria-label="Tema dəyişdir">Açıq</button>
         </div>
       </div>
     </nav>
@@ -61,16 +61,15 @@
       <section class="hero">
         <div class="container hero-grid">
           <div>
-            <span class="eyebrow">Texniki dəstək</span>
-            <h1>Texniki xidmət üçün sürətli, aydın izləmə platforması.</h1>
+            <span class="eyebrow">Peşəkar təmir Bakıda</span>
+            <h1>Peşəkar Telefon, Noutbuk və Server Təmir Xidməti Bakıda</h1>
             <p class="hero-lead">
-              Laptop, PC, server və cihazlar üçün peşəkar yardım. Sifarişinizi açın,
-              statusu izləyin və qiyməti real vaxtda görün.
+              Baku Servis Bakı və ətrafında telefon, noutbuk, server, şəbəkə və biznes IT sistemləri üçün peşəkar texniki dəstək, diaqnostika və təmir xidmətləri təqdim edir.
             </p>
 
             <div class="hero-actions">
               <a href="#request-panel" class="btn btn-primary">Müraciət et</a>
-              <a href="#track" class="btn btn-outline">İzləmə et</a>
+              <a href="#" class="btn btn-outline" data-tel="tel:+994707164142">Zəng edin</a>
             </div>
 
             <div class="hero-meta">
@@ -287,9 +286,9 @@
     <footer>
       <div class="container footer-grid">
         <div>
-          <div class="brand"><span class="dot"></span>HUGU SERVIS</div>
+          <div class="brand"><span class="brand-mark" aria-hidden="true"><img src="logo.svg" alt="" /></span><span class="brand-text">BAKU SERVIS</span></div>
         </div>
-        <p>© 2026 HUGU Servis. Bütün hüquqlar qorunur.</p>
+        <p>© 2026 Baku Servis. Bütün hüquqlar qorunur.</p>
       </div>
     </footer>
 
@@ -327,7 +326,7 @@
       <div class="chat-toggle" id="chat-toggle">Canlı Çat</div>
       <div class="chat-panel" id="chat-panel" style="display:none;">
         <div class="chat-header">
-          <strong>Hugu Servis</strong>
+          <strong>Baku Servis</strong>
           <button type="button" class="btn btn-ghost" id="chat-close">×</button>
         </div>
         <div id="customer-chat-messages" class="chat-log"></div>
@@ -339,7 +338,7 @@
       </div>
     </div>
 
-    <div class="floating-actions" aria-label="Hugu Servis canlı dəstək">
+    <div class="floating-actions" aria-label="Baku Servis canlı dəstək">
       <button type="button" id="chat-toggle-btn" class="chat-toggle-btn" aria-label="Canlı Çat aç/bağla">
         <span class="chat-toggle-btn-icon">💬</span>
         <span class="chat-toggle-btn-text">Canlı Çat / Bot</span>

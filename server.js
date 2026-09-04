@@ -10,7 +10,7 @@ const sqlite3 = require('sqlite3').verbose();
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const DATA_DIR = path.join(__dirname, 'data');
-const DB_PATH = path.join(DATA_DIR, 'hugu.sqlite');
+const DB_PATH = path.join(DATA_DIR, 'bakuservis.sqlite');
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const db = new sqlite3.Database(DB_PATH);
@@ -87,7 +87,7 @@ function getKnowledgeBaseReply(message, historyMessages = []) {
   const totalCustomerTurns = customerHistory.length;
 
   if (!text) {
-    return 'Salam! Hugu Servis İT Dəstək Mərkəzinə xoş gəlmisiniz. Sizə necə kömək edə bilərəm? 🛠️';
+    return 'Salam! Baku Servis peşəkar texniki dəstək mərkəzinə xoş gəlmisiniz. Sizə necə kömək edə bilərəm? 🛠️';
   }
 
   if (hasRepeatedTopic(message, historyMessages) || totalCustomerTurns >= 3 || (!intent && text.length >= 5)) {
@@ -95,7 +95,7 @@ function getKnowledgeBaseReply(message, historyMessages = []) {
   }
 
   if (intent === 'greeting') {
-    return 'Salam! Necəsiniz? Hugu Servis İT Dəstək Mərkəzinə xoş gəlmisiniz. Sizə necə kömək edə bilərəm? 🛠️';
+    return 'Salam! Necəsiniz? Baku Servis peşəkar texniki dəstək mərkəzinə xoş gəlmisiniz. Sizə necə kömək edə bilərəm? 🛠️';
   }
 
   if (intent === 'courtesy') {
@@ -262,11 +262,15 @@ async function ensureDatabase() {
     await run('ALTER TABLE services ADD COLUMN price REAL DEFAULT 0');
   }
 
-  const admin = await get('SELECT id FROM admins WHERE username = ?', [ADMIN_USERNAME]);
+  const admin = await get('SELECT id, password_hash FROM admins WHERE username = ?', [ADMIN_USERNAME]);
+  const passwordHash = bcrypt.hashSync(ADMIN_PASSWORD, 10);
+
   if (!admin) {
-    const passwordHash = bcrypt.hashSync(ADMIN_PASSWORD, 10);
     await run('INSERT INTO admins (username, password_hash) VALUES (?, ?)', [ADMIN_USERNAME, passwordHash]);
     console.log(`Default admin created: ${ADMIN_USERNAME}`);
+  } else if (!bcrypt.compareSync(ADMIN_PASSWORD, admin.password_hash)) {
+    await run('UPDATE admins SET password_hash = ? WHERE username = ?', [passwordHash, ADMIN_USERNAME]);
+    console.log(`Admin password reset for ${ADMIN_USERNAME}`);
   }
 
   const seedServices = [
@@ -288,7 +292,7 @@ async function startServer() {
   try {
     await ensureDatabase();
     app.listen(PORT, () => {
-      console.log(`HUGU Servis server started on http://localhost:${PORT}`);
+      console.log(`Baku Servis server started on http://localhost:${PORT}`);
     });
   } catch (error) {
     console.error('Database initialization failed:', error);
@@ -299,7 +303,7 @@ async function startServer() {
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'hugu-servis-session-secret',
+  secret: process.env.SESSION_SECRET || 'bakuservis-session-secret',
   resave: false,
   saveUninitialized: false,
   cookie: {

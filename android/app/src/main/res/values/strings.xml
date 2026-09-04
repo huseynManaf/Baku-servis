@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Hugu Servis</string>
-    <string name="title_activity_main">Hugu Servis</string>
-    <string name="package_name">com.huguservis.app</string>
-    <string name="custom_url_scheme">com.huguservis.app</string>
+    <string name="app_name">Baku Servis</string>
+    <string name="title_activity_main">Baku Servis</string>
+    <string name="package_name">com.bakuservis.app</string>
+    <string name="custom_url_scheme">com.bakuservis.app</string>
 </resources>

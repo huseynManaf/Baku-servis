@@ -88,13 +88,23 @@
     const resolved = theme === 'light' ? 'light' : 'dark';
     root.dataset.theme = resolved;
     root.classList.toggle('theme-light', resolved === 'light');
-    if (themeToggle) themeToggle.textContent = resolved === 'light' ? 'Dark' : 'Light';
-    localStorage.setItem('hugu-theme', resolved);
+    if (themeToggle) themeToggle.textContent = resolved === 'light' ? 'Qaranlıq' : 'Açıq';
+    localStorage.setItem('bakuservis-theme', resolved);
   }
 
   function isWithinAzerbaijan(lat, lng) {
     return Number(lat) >= 38.3 && Number(lat) <= 41.9 && Number(lng) >= 44.7 && Number(lng) <= 50.9;
   }
+
+  document.addEventListener('click', (event) => {
+    const telLink = event.target.closest('[data-tel]');
+    if (!telLink) return;
+    event.preventDefault();
+    const telValue = telLink.getAttribute('data-tel');
+    if (telValue) {
+      window.location.href = telValue;
+    }
+  });
 
   function showToast(message, type = 'error') {
     const container = document.getElementById('toast-container');
@@ -590,8 +600,8 @@
   payButton?.addEventListener('click', openPaymentModal);
 
   function initCustomerChat() {
-    const sessionId = localStorage.getItem('hugu-chat-session') || `customer-${Date.now()}`;
-    localStorage.setItem('hugu-chat-session', sessionId);
+    const sessionId = localStorage.getItem('bakuservis-chat-session') || `customer-${Date.now()}`;
+    localStorage.setItem('bakuservis-chat-session', sessionId);
 
     const chatToggle = document.getElementById('chat-toggle');
     const chatToggleBtn = document.getElementById('chat-toggle-btn');
@@ -600,7 +610,7 @@
     const chatInput = document.getElementById('customer-chat-input');
     const chatSend = document.getElementById('customer-chat-send');
     const closeChat = document.getElementById('chat-close');
-    const greetingText = 'Salam! Hugu Servis İT Dəstək Mərkəzinə xoş gəlmisiniz. Sizə necə kömək edə bilərəm? 🛠️';
+    const greetingText = 'Salam! Baku Servis peşəkar texniki dəstək mərkəzinə xoş gəlmisiniz. Sizə necə kömək edə bilərəm? 🛠️';
 
     function setChatOpen(isOpen) {
       if (!chatPanel) return;
@@ -612,7 +622,7 @@
 
     async function showInitialGreeting() {
       if (!chatPanel || !chatMessages) return;
-      const alreadyShown = localStorage.getItem('hugu-chat-greeting-shown') === 'true';
+      const alreadyShown = localStorage.getItem('bakuservis-chat-greeting-shown') === 'true';
       if (alreadyShown) return;
 
       try {
@@ -623,7 +633,7 @@
         });
 
         if (response.ok) {
-          localStorage.setItem('hugu-chat-greeting-shown', 'true');
+          localStorage.setItem('bakuservis-chat-greeting-shown', 'true');
           await loadChatHistory();
         }
       } catch (error) {
@@ -647,7 +657,7 @@
           const isCustomer = sender === 'customer';
           const isAdmin = sender === 'admin';
           const isBot = sender === 'bot';
-          const label = isBot ? '🤖 Hugu AI' : isAdmin ? '👨‍💼 Hugu Team' : '🧑 Müşteri';
+          const label = isBot ? '🤖 Baku AI' : isAdmin ? '👨‍💼 Baku Team' : '🧑 Müşteri';
           const className = isBot ? 'bot' : isAdmin ? 'admin' : 'customer';
 
           return `
@@ -709,7 +719,7 @@
     loadChatHistory();
   }
 
-  const savedTheme = localStorage.getItem('hugu-theme') || 'dark';
+  const savedTheme = localStorage.getItem('bakuservis-theme') || 'dark';
   applyTheme(savedTheme);
   themeToggle?.addEventListener('click', () => {
     const nextTheme = document.body.dataset.theme === 'light' ? 'dark' : 'light';

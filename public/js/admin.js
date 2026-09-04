@@ -422,7 +422,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const sender = String(msg.sender_type || 'customer');
         const isBot = sender === 'bot';
         const isCustomer = sender === 'customer';
-        const label = isBot ? '🤖 Hugu AI Bot' : isCustomer ? '🧑 Müşteri' : '👨‍💼 Hugu Team';
+        const label = isBot ? '🤖 Baku AI Bot' : isCustomer ? '🧑 Müşteri' : '👨‍💼 Baku Team';
         const className = isBot ? 'bot' : isCustomer ? 'customer' : 'admin';
 
         return `

@@ -43,10 +43,10 @@ jobs:
             tar -xzf release.tar.gz -C .
             npm install --production
             if command -v pm2 >/dev/null 2>&1; then
-              pm2 restart all || pm2 start server.js --name hugu-servis
+              pm2 restart all || pm2 start server.js --name bakuservis
             else
-              if systemctl list-units --type=service --all | grep -q hugu-servis; then
-                sudo systemctl restart hugu-servis
+              if systemctl list-units --type=service --all | grep -q bakuservis; then
+                sudo systemctl restart bakuservis
               else
                 echo "No pm2 or systemd service found — you may need to restart manually"
               fi

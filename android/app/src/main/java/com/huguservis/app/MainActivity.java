@@ -1,4 +1,4 @@
-package com.huguservis.app;
+package com.bakuservis.app;
 
 import com.getcapacitor.BridgeActivity;
 

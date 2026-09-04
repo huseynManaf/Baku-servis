@@ -74,7 +74,7 @@ if (process.env.DATABASE_URL) {
   // fall back to a simple in-memory adapter so the app doesn't crash.
   try {
     const Database = require('better-sqlite3');
-    const dbFile = path.join(__dirname, 'data', 'hugu.sqlite');
+    const dbFile = path.join(__dirname, 'data', 'bakuservis.sqlite');
     const sqlite = new Database(dbFile);
     module.exports = {
       query: (sql, params = []) => {

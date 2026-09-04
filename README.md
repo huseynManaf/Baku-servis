@@ -1,4 +1,4 @@
-# HUGU Servis — Komputer/Notebook Texniki Xidmət Platforması
+# Baku Servis — Peşəkar Telefon, Noutbuk və Server Texniki Xidmət Platforması
 
 Bu layihə tam işlək bir prototipdir: müştəri sifariş forması + canlı yazışma (chat) +
 onlayn ödəniş (demo rejimində) + admin panel (xidmət/qiymət idarəsi, müraciətlərə baxış,
@@ -9,7 +9,7 @@ statuslar) + SQLite bazası.
 Lazımdır: **Node.js 18+** (https://nodejs.org saytından yükləyin).
 
 ```bash
-cd hugu-servis
+cd bakuservis
 npm install
 cp .env.example .env
 # .env faylını açıb SESSION_SECRET, ADMIN_USER, ADMIN_PASS dəyərlərini dəyişin
@@ -18,7 +18,7 @@ npm start
 
 Server ayağa qalxanda konsolda görəcəksiniz:
 ```
-HUGU Servis 3000 portunda ishe dushdu -> http://localhost:3000
+Baku Servis 3000 portunda işə düşdü -> http://localhost:3000
 ```
 
 - Müştəri saytı: **http://localhost:3000**
@@ -29,7 +29,7 @@ HUGU Servis 3000 portunda ishe dushdu -> http://localhost:3000
 - **Şifrə:** `Baku2019`
 
 Bu, yalnız `admins` cədvəli boş olanda (yəni bazanı ilk dəfə işə saldığınızda) avtomatik
-yaradılır. Şifrəni dəyişmək istəsəniz, hazırkı versiyada bunu bazanı silib (`data/hugu.db`)
+yaradılır. Şifrəni dəyişmək istəsəniz, hazırkı versiyada bunu bazanı silib (`data/bakuservis.db`)
 yeni `.env` dəyərləri ilə yenidən başlatmaqla edə bilərsiniz — istəsəniz ayrıca "şifrə dəyiş"
 ekranı da əlavə edə bilərəm ki, bunu panelin özündən edəsiniz.
 
@@ -60,7 +60,7 @@ ekranı da əlavə edə bilərəm ki, bunu panelin özündən edəsiniz.
 
 ## 3. Verilənlər bazası
 
-SQLite istifadə olunur (`better-sqlite3`), fayl: `data/hugu.db`. Ayrıca server qurmağa
+SQLite istifadə olunur (`better-sqlite3`), fayl: `data/bakuservis.db`. Ayrıca server qurmağa
 ehtiyac yoxdur — fayl sisteminin özü bazadır, kiçik/orta ölçülü bir servis saytı üçün
 tam kifayətdir.
 
@@ -72,7 +72,7 @@ tam kifayətdir.
 - `npm run backup` əmri ilə bazanın anlıq surəti `backups/` qovluğuna köçürülür, son 14 nüsxə
   saxlanılır. Bunu serverinizdə **cron** və ya **pm2** ilə hər gecə avtomatlaşdıra bilərsiniz:
   ```
-  0 3 * * * cd /tam/yol/hugu-servis && npm run backup >> backup.log 2>&1
+  0 3 * * * cd /tam/yol/bakuservis && npm run backup >> backup.log 2>&1
   ```
 - Server tərəfində gözlənilməz xətalar (`uncaughtException`, `unhandledRejection`) tutulur və
   loglanır ki, server bir xəta üzündən tamamilə dayanmasın.
@@ -109,7 +109,7 @@ sessiyanı da bazada saxlamaq lazım gələ bilər, bunu da tələb olunanda əl
 
 Sadə variantlar:
 - **VPS (məs. Hetzner, DigitalOcean, Azerbaycanlı hostinq)**: Node.js quraşdırın, layihəni
-  yükləyin, `pm2 start server.js --name hugu-servis` ilə daimi işlək saxlayın, Nginx ilə
+  yükləyin, `pm2 start server.js --name bakuservis` ilə daimi işlək saxlayın, Nginx ilə
   domenə bağlayın və pulsuz SSL üçün Let's Encrypt/Certbot istifadə edin.
 - **Platform-as-a-service** (Railway, Render və s.): layihəni GitHub-a atıb birbaşa qoşa bilərsiniz.
 
@@ -118,7 +118,7 @@ Domen adı və server seçimi ilə bağlı da kömək lazımdırsa deyin.
 ## 6. Fayl strukturu
 
 ```
-hugu-servis/
+bakuservis/
   server.js          -> bütün API endpoint-ləri
   db.js               -> SQLite sxemi, seed data, stabillik tənzimləmələri
   scripts/backup.js   -> baza ehtiyat nüsxəsi
@@ -128,7 +128,7 @@ hugu-servis/
     css/style.css      -> dizayn
     js/main.js         -> müştəri saytının məntiqi
     js/admin.js         -> admin panelin məntiqi
-  data/hugu.db        -> (avtomatik yaranır) verilənlər bazası
+  data/bakuservis.db -> (avtomatik yaranır) verilənlər bazası
   backups/            -> ehtiyat nüsxələr
   .env                -> gizli tənzimləmələr (sizin doldurmalısınız)
 ```
