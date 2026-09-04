@@ -2,13 +2,24 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const http = require('http');
 const express = require('express');
+const cors = require('cors');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
+const nodemailer = require('nodemailer');
 const sqlite3 = require('sqlite3').verbose();
+const { Server } = require('socket.io');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: true,
+    credentials: true
+  }
+});
 const DATA_DIR = path.join(__dirname, 'data');
 const DB_PATH = path.join(DATA_DIR, 'bakuservis.db');
 
@@ -18,6 +29,28 @@ db.configure('busyTimeout', 5000);
 
 const ADMIN_USERNAME = process.env.DEFAULT_ADMIN_USER || process.env.ADMIN_USER || 'huseynmanfli844@gmail.com';
 const ADMIN_PASSWORD = process.env.DEFAULT_ADMIN_PASS || process.env.ADMIN_PASS || 'Baku2019';
+const SUPER_ADMIN_ROLE = 'SUPER_ADMIN';
+const ADMIN_ROLE = 'ADMIN';
+const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
+const SMTP_PORT = Number(process.env.SMTP_PORT || 465);
+const SMTP_SECURE = String(process.env.SMTP_SECURE || 'true').toLowerCase() === 'true';
+const SMTP_USER = process.env.SMTP_USER || process.env.EMAIL_USER || 'huseynmanafli844@gmail.com';
+const SMTP_PASS = process.env.SMTP_PASS || process.env.EMAIL_PASS || '';
+const MAIL_FROM = process.env.MAIL_FROM || 'Baku Servis <noreply@bakuservis.az>';
+const ADMIN_EMAIL = 'huseynmanafli844@gmail.com';
+const SUPER_ADMIN_EMAIL_ALIASES = Array.from(new Set([
+  ADMIN_USERNAME,
+  'huseynmanfli844@gmail.com',
+  'huseynmanafli844@gmail.com',
+  ADMIN_USERNAME.replace('manfli', 'manafli'),
+  ADMIN_USERNAME.replace('manafli', 'manfli')
+].filter(Boolean)));
+
+function normalizeRole(value) {
+  const role = String(value || '').trim().toUpperCase();
+  if (role === 'SUPER_ADMIN' || role === 'SUPERADMIN') return SUPER_ADMIN_ROLE;
+  return ADMIN_ROLE;
+}
 
 function nowIso() {
   return new Date().toISOString();
@@ -125,9 +158,91 @@ function generateTrackingCode() {
   return `HG-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
 }
 
+function buildNotificationHtml({ title, details, summary }) {
+  const rows = Object.entries(details || {}).map(([label, value]) => `
+    <tr>
+      <td style="padding:8px 10px; border-bottom:1px solid #eef2ff; color:#475569; font-weight:600;">${label}</td>
+      <td style="padding:8px 10px; border-bottom:1px solid #eef2ff; color:#0f172a;">${value}</td>
+    </tr>
+  `).join('');
+
+  return `
+    <div style="font-family:Arial,sans-serif;background:#f8fafc;padding:24px;color:#0f172a;">
+      <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;">
+        <div style="background:linear-gradient(135deg,#0f172a,#1d4ed8);padding:20px 24px;color:#fff;">
+          <h2 style="margin:0;font-size:24px;">${title}</h2>
+        </div>
+        <div style="padding:20px 24px;">
+          <p style="margin:0 0 16px;color:#334155;">${summary}</p>
+          <table style="width:100%;border-collapse:collapse;background:#f8fafc;border-radius:12px;overflow:hidden;">
+            ${rows}
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function sendAdminEmail({ title, summary, details }) {
+  const transporter = (() => {
+    if (!SMTP_PASS) {
+      console.warn('SMTP_PASS is not configured; skipping email notification.');
+      return null;
+    }
+
+    return nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_SECURE,
+      auth: {
+        user: SMTP_USER,
+        pass: SMTP_PASS
+      }
+    });
+  })();
+
+  if (!transporter) return Promise.resolve();
+
+  const subject = title;
+  const text = `${summary}\n\n${Object.entries(details || {}).map(([key, value]) => `${key}: ${value}`).join('\n')}`;
+
+  return transporter.sendMail({
+    from: MAIL_FROM,
+    to: ADMIN_EMAIL,
+    subject,
+    text,
+    html: buildNotificationHtml({ title, summary, details })
+  }).catch((error) => {
+    console.error('Email notification failed:', error);
+  });
+}
+
+function emitAdminNotification(payload) {
+  io.emit('admin:notification', {
+    title: payload.title || 'Yeni bildiriş',
+    message: payload.message || 'Yeni tədbir baş verdi.',
+    meta: payload.meta || {}
+  });
+}
+
 function requireAdmin(req, res, next) {
-  if (req.session && req.session.adminId) return next();
+  const role = normalizeRole(req.session?.user?.role || req.session?.adminRole || 'ADMIN');
+  if (req.session && req.session.adminId && (role === ADMIN_ROLE || role === SUPER_ADMIN_ROLE)) {
+    req.session.user = req.session.user || {};
+    req.session.user.role = role;
+    return next();
+  }
   return res.status(401).json({ error: 'Admin girişi tələb olunur.' });
+}
+
+function requireSuperAdmin(req, res, next) {
+  const role = normalizeRole(req.session?.user?.role || req.session?.adminRole || 'ADMIN');
+  if (req.session && req.session.adminId && role === SUPER_ADMIN_ROLE) {
+    req.session.user = req.session.user || {};
+    req.session.user.role = role;
+    return next();
+  }
+  return res.status(403).json({ error: 'Bu əməliyyat üçün super admin icazəsi tələb olunur.' });
 }
 
 function run(sql, params = []) {
@@ -159,13 +274,38 @@ function all(sql, params = []) {
 
 async function ensureDatabase() {
   await run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT UNIQUE NOT NULL,
+      username TEXT,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'ADMIN',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  const userColumns = new Set((await all('PRAGMA table_info(users)')).map((col) => col.name));
+  if (!userColumns.has('role')) {
+    await run("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'ADMIN'");
+  }
+  if (!userColumns.has('username')) {
+    await run('ALTER TABLE users ADD COLUMN username TEXT');
+  }
+
+  await run(`
     CREATE TABLE IF NOT EXISTS admins (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'ADMIN',
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
+
+  const adminColumns = new Set((await all('PRAGMA table_info(admins)')).map((col) => col.name));
+  if (!adminColumns.has('role')) {
+    await run("ALTER TABLE admins ADD COLUMN role TEXT NOT NULL DEFAULT 'ADMIN'");
+  }
 
   await run(`
     CREATE TABLE IF NOT EXISTS services (
@@ -262,11 +402,22 @@ async function ensureDatabase() {
     await run('ALTER TABLE services ADD COLUMN price REAL DEFAULT 0');
   }
 
-  const admin = await get('SELECT id FROM admins WHERE username = ?', [ADMIN_USERNAME]);
-  if (!admin) {
-    const passwordHash = bcrypt.hashSync(ADMIN_PASSWORD, 10);
-    await run('INSERT INTO admins (username, password_hash) VALUES (?, ?)', [ADMIN_USERNAME, passwordHash]);
-    console.log(`Default admin created: ${ADMIN_USERNAME}`);
+  const superAdminPasswordHash = bcrypt.hashSync(ADMIN_PASSWORD, 10);
+  const userLookupArgs = SUPER_ADMIN_EMAIL_ALIASES.flatMap((candidate) => [candidate, candidate]);
+  const userLookupQuery = `SELECT * FROM users WHERE ${SUPER_ADMIN_EMAIL_ALIASES.map(() => 'LOWER(email) = LOWER(?) OR LOWER(username) = LOWER(?)').join(' OR ')}`;
+  const userRecord = await get(userLookupQuery, userLookupArgs);
+  if (!userRecord) {
+    await run('INSERT INTO users (email, username, password_hash, role) VALUES (?, ?, ?, ?)', [ADMIN_USERNAME, ADMIN_USERNAME, superAdminPasswordHash, SUPER_ADMIN_ROLE]);
+    console.log(`Default super admin created: ${ADMIN_USERNAME}`);
+  } else {
+    await run('UPDATE users SET email = ?, username = ?, password_hash = ?, role = ? WHERE id = ?', [ADMIN_USERNAME, ADMIN_USERNAME, superAdminPasswordHash, SUPER_ADMIN_ROLE, userRecord.id]);
+  }
+
+  const legacyAdmin = await get('SELECT * FROM admins WHERE LOWER(username) = LOWER(?)', [ADMIN_USERNAME]);
+  if (!legacyAdmin) {
+    await run('INSERT INTO admins (username, password_hash, role) VALUES (?, ?, ?)', [ADMIN_USERNAME, superAdminPasswordHash, SUPER_ADMIN_ROLE]);
+  } else {
+    await run('UPDATE admins SET password_hash = ?, role = ? WHERE id = ?', [superAdminPasswordHash, SUPER_ADMIN_ROLE, legacyAdmin.id]);
   }
 
   const seedServices = [
@@ -287,7 +438,7 @@ async function ensureDatabase() {
 async function startServer() {
   try {
     await ensureDatabase();
-    app.listen(PORT, () => {
+    server.listen(PORT, () => {
       console.log(`Baku Servis server started on http://localhost:${PORT}`);
     });
   } catch (error) {
@@ -296,6 +447,7 @@ async function startServer() {
   }
 }
 
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
@@ -337,6 +489,36 @@ app.get('/', (req, res) => {
 
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+app.post('/api/login', async (req, res) => {
+  try {
+    const username = String(req.body.username || '').trim();
+    const password = String(req.body.password || '');
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'İstifadəçi adı və şifrə tələb olunur.' });
+    }
+
+    const candidateUser = await get('SELECT * FROM users WHERE LOWER(email) = LOWER(?) OR LOWER(username) = LOWER(?)', [username, username]);
+    if (!candidateUser || !bcrypt.compareSync(password, candidateUser.password_hash)) {
+      return res.status(401).json({ error: 'Yanlış istifadəçi adı və ya şifrə.' });
+    }
+
+    req.session.adminId = candidateUser.id;
+    req.session.adminUser = candidateUser.email || candidateUser.username || username;
+    req.session.adminRole = normalizeRole(candidateUser.role || ADMIN_ROLE);
+    req.session.user = {
+      id: candidateUser.id,
+      email: candidateUser.email || candidateUser.username || username,
+      role: req.session.adminRole
+    };
+
+    return res.json({ ok: true, username: req.session.adminUser, role: req.session.adminRole, isSuperAdmin: req.session.adminRole === SUPER_ADMIN_ROLE });
+  } catch (error) {
+    console.error('POST /api/login error:', error);
+    return res.status(500).json({ error: 'Mobil giriş zamanı xəta baş verdi.' });
+  }
 });
 
 app.get('/api/services', async (req, res) => {
@@ -459,6 +641,33 @@ app.post('/api/requests', async (req, res) => {
       INSERT INTO requests (tracking_code, customer_name, customer_phone, service_name, device_info, status, quoted_price, final_price, is_onsite, address, latitude, longitude, payment_method, payment_status, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [tracking_code, customer_name, customer_phone, service_name, device_info || null, 'Gözləmədə', 0, 0, is_onsite ? 1 : 0, address || null, Number.isFinite(latitude) ? latitude : null, Number.isFinite(longitude) ? longitude : null, normalizedPaymentMethod, paymentStatus, timestamp, timestamp]);
+
+    emitAdminNotification({
+      title: 'Yeni müraciət',
+      message: `${customer_name} yeni servis müraciəti göndərdi.`,
+      meta: {
+        customer_name,
+        service_name,
+        customer_phone,
+        status: 'Gözləmədə',
+        tracking_code
+      }
+    });
+
+    await sendAdminEmail({
+      title: 'Baku Servis — Yeni müraciət',
+      summary: 'Sistemə yeni xidmət müraciəti daxil olub.',
+      details: {
+        'Müştəri': customer_name,
+        'Telefon': customer_phone,
+        'Xidmət': service_name,
+        'Cihaz': device_info || '-',
+        'Ünvan': address || '-',
+        'Səyyar xidmət': is_onsite ? 'Bəli' : 'Xeyr',
+        'Ödəniş üsulu': normalizedPaymentMethod,
+        'İzləmə kodu': tracking_code
+      }
+    });
 
     return res.status(201).json({
       ok: true,
@@ -630,15 +839,38 @@ app.post('/api/admin/login', async (req, res) => {
   try {
     const username = String(req.body.username || '').trim();
     const password = String(req.body.password || '');
+    const lookupCandidates = Array.from(new Set([
+      username,
+      ADMIN_USERNAME,
+      'huseynmanfli844@gmail.com',
+      'huseynmanafli844@gmail.com',
+      username.replace('manfli', 'manafli'),
+      username.replace('manafli', 'manfli'),
+      ADMIN_USERNAME.replace('manfli', 'manafli'),
+      ADMIN_USERNAME.replace('manafli', 'manfli')
+    ].filter(Boolean)));
+    const lookupQuery = `SELECT * FROM users WHERE ${lookupCandidates.map(() => 'LOWER(email) = LOWER(?) OR LOWER(username) = LOWER(?)').join(' OR ')}`;
+    const lookupArgs = lookupCandidates.flatMap((candidate) => [candidate, candidate]);
 
-    const admin = await get('SELECT * FROM admins WHERE username = ?', [username]);
-    if (!admin || !bcrypt.compareSync(password, admin.password_hash)) {
+    const user = await get(lookupQuery, lookupArgs);
+    const admin = !user ? await get('SELECT * FROM admins WHERE LOWER(username) = LOWER(?)', [username]) : null;
+    const account = user || admin;
+
+    if (!account || !bcrypt.compareSync(password, account.password_hash)) {
       return res.status(401).json({ error: 'Yanlış istifadəçi adı və ya şifrə.' });
     }
 
-    req.session.adminId = admin.id;
-    req.session.adminUser = admin.username;
-    return res.json({ ok: true, username: admin.username });
+    const role = normalizeRole((account.role || (username.toLowerCase() === ADMIN_USERNAME.toLowerCase() ? SUPER_ADMIN_ROLE : ADMIN_ROLE)));
+    req.session.adminId = account.id;
+    req.session.adminUser = account.email || account.username || username;
+    req.session.adminRole = role;
+    req.session.user = {
+      id: account.id,
+      email: account.email || account.username || username,
+      role
+    };
+
+    return res.json({ ok: true, username: req.session.adminUser, role, isSuperAdmin: role === SUPER_ADMIN_ROLE });
   } catch (error) {
     console.error('POST /api/admin/login error:', error);
     return res.status(500).json({ error: 'Admin girişi zamanı xəta.' });
@@ -647,9 +879,55 @@ app.post('/api/admin/login', async (req, res) => {
 
 app.get('/api/admin/me', (req, res) => {
   if (req.session && req.session.adminId) {
-    return res.json({ loggedIn: true, username: req.session.adminUser });
+    const role = normalizeRole(req.session.user?.role || req.session.adminRole || ADMIN_ROLE);
+    return res.json({
+      loggedIn: true,
+      username: req.session.adminUser,
+      role,
+      isSuperAdmin: role === SUPER_ADMIN_ROLE
+    });
   }
   return res.json({ loggedIn: false });
+});
+
+app.get('/api/admin/users', requireSuperAdmin, async (req, res) => {
+  try {
+    const rows = await all('SELECT id, email, username, role, created_at FROM users ORDER BY created_at DESC');
+    return res.json({ ok: true, users: rows.map((row) => ({ ...row, role: normalizeRole(row.role) })) });
+  } catch (error) {
+    console.error('GET /api/admin/users error:', error);
+    return res.status(500).json({ error: 'Admin siyahısı yüklənə bilmədi.' });
+  }
+});
+
+app.post('/api/admin/create-admin', requireSuperAdmin, async (req, res) => {
+  try {
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const password = String(req.body.password || '');
+
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'Düzgün e-poçt ünvanı daxil edin.' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Şifrə ən azı 6 simvoldan ibarət olmalıdır.' });
+    }
+
+    const existing = await get('SELECT * FROM users WHERE LOWER(email) = LOWER(?)', [email]);
+    if (existing) {
+      return res.status(409).json({ error: 'Bu admin artıq mövcuddur.' });
+    }
+
+    const passwordHash = bcrypt.hashSync(password, 10);
+    const role = ADMIN_ROLE;
+    const result = await run('INSERT INTO users (email, username, password_hash, role) VALUES (?, ?, ?, ?)', [email, email, passwordHash, role]);
+    const newUser = await get('SELECT * FROM users WHERE id = ?', [result.lastInsertRowid]);
+
+    return res.status(201).json({ ok: true, user: { id: newUser.id, email: newUser.email, username: newUser.username || newUser.email, role: normalizeRole(newUser.role) } });
+  } catch (error) {
+    console.error('POST /api/admin/create-admin error:', error);
+    return res.status(500).json({ error: 'Yeni admin yaradılarkən xəta baş verdi.' });
+  }
 });
 
 app.post('/api/admin/logout', (req, res) => {
@@ -683,9 +961,27 @@ app.post('/api/chat/send', async (req, res) => {
         [sessionId, 'bot', botReply, nowIso()]
       );
       const botRow = await get('SELECT * FROM chat_messages WHERE id = ?', [botSaved.lastInsertRowid]);
+
+      emitAdminNotification({
+        title: 'Yeni canlı chat',
+        message: `Yeni mesaj: ${message}`,
+        meta: { session_id: sessionId, sender_type: 'customer' }
+      });
+
+      await sendAdminEmail({
+        title: 'Baku Servis — Canlı chat mesajı',
+        summary: 'Canlı çatda yeni müştəri mesajı daxil olub.',
+        details: {
+          'Session ID': sessionId,
+          'Müştəri mesajı': message,
+          'Bot cavabı': botReply
+        }
+      });
+
       return res.status(201).json({ ok: true, message: row, bot_message: botRow, reply: botReply });
     }
 
+    io.emit('chat:message', { session_id: sessionId, sender_type: senderType, message });
     return res.status(201).json({ ok: true, message: row });
   } catch (error) {
     console.error('POST /api/chat/send error:', error);
@@ -746,6 +1042,12 @@ app.get('/api/admin/chats', requireAdmin, async (req, res) => {
     console.error('GET /api/admin/chats error:', error);
     return res.status(500).json({ error: 'Canlı çat siyahısı yüklənə bilmədi.' });
   }
+});
+
+io.on('connection', (socket) => {
+  socket.on('admin:join', () => {
+    socket.emit('admin:joined', { ok: true });
+  });
 });
 
 startServer();

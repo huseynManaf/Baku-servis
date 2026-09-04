@@ -80,6 +80,7 @@
         <a href="#" class="nav-item active" data-view="requests">Müraciətlər</a>
         <a href="#" class="nav-item" data-view="services">Xidmətlər</a>
         <a href="#" class="nav-item" data-view="chats">Canlı Çat</a>
+        <a href="#" class="nav-item super-admin-only" data-view="users" style="display:none;">Adminlər</a>
 
         <div style="margin-top: 28px;">
           <button id="logout-btn" class="btn btn-outline btn-block">Çıxış</button>
@@ -89,7 +90,10 @@
       <main class="admin-main">
         <div class="admin-top">
           <h2 style="margin:0;">Admin panel</h2>
-          <span class="small" id="admin-user">-</span>
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <span class="status-badge status-hazir" id="admin-role-badge">ADMIN</span>
+            <span class="small" id="admin-user">-</span>
+          </div>
         </div>
 
         <div class="stat-grid">
@@ -150,6 +154,42 @@
                   </tr>
                 </thead>
                 <tbody id="services-table"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section id="users-view" style="display:none; margin-top: 18px;">
+          <div class="card" id="create-admin-card" style="display:none; margin-bottom: 18px;">
+            <h3 style="margin-top:0;">Yeni admin əlavə et</h3>
+            <form id="create-admin-form">
+              <div class="field">
+                <label for="new-admin-email">E-poçt</label>
+                <input id="new-admin-email" type="email" required autocomplete="email" aria-label="E-poçt" />
+              </div>
+
+              <div class="field">
+                <label for="new-admin-password">Şifrə</label>
+                <input id="new-admin-password" type="password" required minlength="6" autocomplete="new-password" aria-label="Şifrə" />
+              </div>
+
+              <button type="submit" class="btn btn-primary">Admin yaradın</button>
+              <div id="create-admin-message" class="small" style="margin-top: 12px; min-height: 18px;"></div>
+            </form>
+          </div>
+
+          <div class="card">
+            <h3 style="margin-top:0;">Admin siyahısı</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>E-poçt</th>
+                    <th>Rol</th>
+                    <th>Yaranma</th>
+                  </tr>
+                </thead>
+                <tbody id="users-table"></tbody>
               </table>
             </div>
           </div>

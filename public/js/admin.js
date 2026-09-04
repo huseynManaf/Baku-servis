@@ -19,9 +19,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const adminChatMessages = document.getElementById('admin-chat-messages');
   const adminChatInput = document.getElementById('admin-chat-input');
   const adminChatSend = document.getElementById('admin-chat-send');
+  const adminRoleBadge = document.getElementById('admin-role-badge');
+  const usersView = document.getElementById('users-view');
+  const createAdminCard = document.getElementById('create-admin-card');
+  const createAdminForm = document.getElementById('create-admin-form');
+  const usersTable = document.getElementById('users-table');
 
   let selectedRequestId = null;
   let currentChatSession = null;
+  let currentUserRole = 'ADMIN';
 
   function statusClass(status) {
     const value = String(status || '').toLowerCase();
@@ -51,6 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (servicesView) servicesView.style.display = target === 'services' ? 'block' : 'none';
     if (chatsView) chatsView.style.display = target === 'chats' ? 'block' : 'none';
     if (detailView) detailView.style.display = target === 'detail' ? 'block' : 'none';
+    if (usersView) usersView.style.display = target === 'users' ? 'block' : 'none';
 
     document.querySelectorAll('.nav-item').forEach((item) => {
       item.classList.toggle('active', item.dataset.view === target);
@@ -76,6 +83,16 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await response.json();
 
       if (data.loggedIn) {
+        currentUserRole = data.role || 'ADMIN';
+        const isSuperAdmin = Boolean(data.isSuperAdmin || currentUserRole === 'SUPER_ADMIN');
+        document.querySelectorAll('.super-admin-only').forEach((item) => {
+          item.style.display = isSuperAdmin ? 'block' : 'none';
+        });
+        if (createAdminCard) createAdminCard.style.display = isSuperAdmin ? 'block' : 'none';
+        if (adminRoleBadge) {
+          adminRoleBadge.textContent = isSuperAdmin ? 'SUPER ADMIN' : 'ADMIN';
+          adminRoleBadge.className = `status-badge ${isSuperAdmin ? 'status-hazir' : 'status-qiymetlendirildi'}`;
+        }
         if (loginView) loginView.style.display = 'none';
         if (adminView) adminView.style.display = 'grid';
         if (adminUser) adminUser.textContent = `İstifadəçi: ${data.username}`;
@@ -83,6 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await loadRequests();
         await loadServices();
         await loadAdminChats();
+        if (isSuperAdmin) await loadUsers();
       } else {
         if (loginView) loginView.style.display = 'flex';
         if (adminView) adminView.style.display = 'none';
@@ -366,6 +384,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  async function loadUsers() {
+    try {
+      const response = await fetch('/api/admin/users');
+      if (response.status === 401 || response.status === 403) {
+        redirectToAdminLogin();
+        return;
+      }
+      if (!response.ok) throw new Error(`Admin users request failed: ${response.status}`);
+      const data = await response.json();
+      const users = Array.isArray(data.users) ? data.users : [];
+      if (!usersTable) return;
+      usersTable.innerHTML = users.map((user) => `
+        <tr>
+          <td>${user.email || user.username || '-'}</td>
+          <td>${user.role === 'SUPER_ADMIN' ? 'Super Admin' : 'Admin'}</td>
+          <td>${formatDateTime(user.created_at)}</td>
+        </tr>
+      `).join('');
+    } catch (error) {
+      console.error('loadUsers error:', error);
+    }
+  }
+
   async function loadAdminChats() {
     try {
       const response = await fetch('/api/admin/chats');
@@ -461,6 +502,41 @@ document.addEventListener('DOMContentLoaded', () => {
     if (event.key === 'Enter') {
       event.preventDefault();
       adminChatSend?.click();
+    }
+  });
+
+  createAdminForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const email = document.getElementById('new-admin-email').value.trim();
+    const password = document.getElementById('new-admin-password').value;
+    const messageEl = document.getElementById('create-admin-message');
+
+    try {
+      const response = await fetch('/api/admin/create-admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        if (messageEl) {
+          messageEl.textContent = body.error || 'Admin yaradıla bilmədi.';
+          messageEl.style.color = '#ffb0b0';
+        }
+        return;
+      }
+      if (messageEl) {
+        messageEl.textContent = 'Yeni admin uğurla yaradıldı.';
+        messageEl.style.color = '#8ce7b2';
+      }
+      createAdminForm.reset();
+      await loadUsers();
+    } catch (error) {
+      console.error('createAdmin error:', error);
+      if (messageEl) {
+        messageEl.textContent = 'Yeni admin yaradılarkən xəta baş verdi.';
+        messageEl.style.color = '#ffb0b0';
+      }
     }
   });
 
