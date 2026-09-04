@@ -13,6 +13,7 @@ const { Server } = require('socket.io');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
+const HOST = '0.0.0.0';
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
@@ -558,8 +559,8 @@ async function ensureDatabase() {
 async function startServer() {
   try {
     await ensureDatabase();
-    server.listen(PORT, () => {
-      console.log(`Baku Servis server started on http://localhost:${PORT}`);
+    server.listen(PORT, HOST, () => {
+      console.log(`Baku Servis server started on http://${HOST}:${PORT}`);
     });
   } catch (error) {
     console.error('Database initialization failed:', error);
@@ -604,7 +605,11 @@ app.use((req, res, next) => {
 });
 
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.status(200).sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/health', (req, res) => {
+  res.status(200).send('Baku Servis backend is running!');
 });
 
 app.get('/admin', (req, res) => {
