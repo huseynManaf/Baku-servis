@@ -200,16 +200,17 @@ function buildNotificationHtml({ title, details, summary }) {
   `;
 }
 
-function sendAdminEmail({ title, summary, details }) {
+async function sendGmailNotification({ to, from, subject, text, html }) {
+  const gmailUser = process.env.GMAIL_USER || process.env.EMAIL_USER || SMTP_USER;
+  const gmailAppPassword = process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASS || SMTP_PASS;
+  const recipient = to || process.env.NOTIFICATION_EMAIL || gmailUser || ADMIN_EMAIL;
+
+  if (!gmailUser || !gmailAppPassword || !recipient) {
+    console.warn('Gmail credentials are not configured; skipping email notification.');
+    return null;
+  }
+
   try {
-    const gmailUser = process.env.GMAIL_USER || process.env.EMAIL_USER || SMTP_USER;
-    const gmailAppPassword = process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASS || SMTP_PASS;
-
-    if (!gmailUser || !gmailAppPassword) {
-      console.warn('Gmail credentials are not configured; skipping email notification.');
-      return Promise.resolve();
-    }
-
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
@@ -218,26 +219,32 @@ function sendAdminEmail({ title, summary, details }) {
       }
     });
 
-    const subject = title;
-    const text = `${summary}\n\n${Object.entries(details || {}).map(([key, value]) => `${key}: ${value}`).join('\n')}`;
-
-    return transporter.sendMail({
-      from: process.env.GMAIL_USER || process.env.EMAIL_USER || MAIL_FROM,
-      to: process.env.NOTIFICATION_EMAIL || process.env.GMAIL_USER || ADMIN_EMAIL,
+    const info = await transporter.sendMail({
+      from: from || gmailUser,
+      to: recipient,
       subject,
       text,
-      html: buildNotificationHtml({ title, summary, details })
-    }).then((info) => {
-      console.log('✅ Email sent successfully:', info.response);
-      return info;
-    }).catch((err) => {
-      console.error('❌ Email error:', err);
-      return null;
+      html
     });
+
+    console.log('✅ Email sent successfully:', info.response);
+    return info;
   } catch (error) {
-    console.error('❌ Email error:', error);
-    return Promise.resolve();
+    console.error('❌ Email notification failed:', error);
+    return null;
   }
+}
+
+function sendAdminEmail({ title, summary, details }) {
+  const subject = title;
+  const text = `${summary}\n\n${Object.entries(details || {}).map(([key, value]) => `${key}: ${value}`).join('\n')}`;
+  return sendGmailNotification({
+    from: process.env.GMAIL_USER || process.env.EMAIL_USER || MAIL_FROM,
+    to: process.env.NOTIFICATION_EMAIL || process.env.GMAIL_USER || ADMIN_EMAIL,
+    subject,
+    text,
+    html: buildNotificationHtml({ title, summary, details })
+  });
 }
 
 function emitAdminNotification(payload) {
@@ -849,25 +856,18 @@ app.post('/api/requests', async (req, res) => {
       <p><b>İzləmə Kodu:</b> ${tracking_code}</p>
     `;
 
-    if (gmailTo && gmailFrom) {
-      const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: process.env.GMAIL_USER || process.env.EMAIL_USER,
-          pass: process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASS
-        }
-      });
-
-      transporter.sendMail({
-        from: gmailFrom,
-        to: gmailTo,
-        subject: `🔔 Yeni Müraciət var: ${tracking_code}`,
-        html: requestEmailHtml
-      }).then((info) => {
-        console.log('✅ Email sent successfully:', info.response);
-      }).catch((err) => {
-        console.error('❌ Email error:', err);
-      });
+    try {
+      if (gmailTo && gmailFrom) {
+        await sendGmailNotification({
+          from: gmailFrom,
+          to: gmailTo,
+          subject: `🔔 Yeni Müraciət var: ${tracking_code}`,
+          text: `Yeni müraciət daxil oldu. Müşteri: ${customer_name}, Telefon: ${customer_phone}, Xidmət: ${service_name}.`,
+          html: requestEmailHtml
+        });
+      }
+    } catch (error) {
+      console.error('❌ Email notification failed (non-blocking):', error);
     }
 
     return res.status(200).json({

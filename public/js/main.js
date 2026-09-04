@@ -556,12 +556,12 @@
 
   customerPhoneInput?.addEventListener('input', () => {
     const sanitized = sanitizePhone(customerPhoneInput.value);
-    const formatted = formattedPhoneValue(sanitized);
+    const formatted = formatPhoneValue(sanitized);
     customerPhoneInput.value = formatted;
     customerPhoneInput.setCustomValidity(sanitized.length === 9 ? '' : 'Mobil nömrə 9 rəqəmli olmalıdır.');
   });
 
-  function formattedPhoneValue(value) {
+  function formatPhoneValue(value) {
     const digits = sanitizePhone(value);
     if (!digits) return '';
     if (digits.length <= 2) return `+994 ${digits}`;
