@@ -70,17 +70,18 @@
 
   function sanitizePhone(value) {
     const digits = String(value || '').replace(/\D/g, '');
-    const normalized = digits.replace(/^0+/, '').slice(0, 9);
-    return normalized;
+    if (!digits) return '';
+    const withoutCountry = digits.startsWith('994') ? digits.slice(3) : digits;
+    return withoutCountry.replace(/^0+/, '').slice(0, 9);
   }
 
   function formatPhoneValue(value) {
     const digits = sanitizePhone(value);
     if (!digits) return '';
-    if (digits.length <= 2) return `+994 (${digits}`;
-    if (digits.length <= 5) return `+994 (${digits.slice(0, 2)}) ${digits.slice(2)}`;
-    if (digits.length <= 7) return `+994 (${digits.slice(0, 2)}) ${digits.slice(2, 5)}-${digits.slice(5)}`;
-    return `+994 (${digits.slice(0, 2)}) ${digits.slice(2, 5)}-${digits.slice(5, 7)}-${digits.slice(7, 9)}`;
+    if (digits.length <= 2) return `+994 ${digits}`;
+    if (digits.length <= 5) return `+994 ${digits.slice(0, 2)} ${digits.slice(2)}`;
+    if (digits.length <= 7) return `+994 ${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5)}`;
+    return `+994 ${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5, 7)} ${digits.slice(7, 9)}`;
   }
 
   function applyTheme(theme) {
@@ -439,14 +440,19 @@
 
   customerPhoneInput?.addEventListener('input', () => {
     const sanitized = sanitizePhone(customerPhoneInput.value);
-    const formatted = sanitized ? (() => {
-      if (sanitized.length <= 2) return `+994 (${sanitized}`;
-      if (sanitized.length <= 5) return `+994 (${sanitized.slice(0, 2)}) ${sanitized.slice(2)}`;
-      if (sanitized.length <= 7) return `+994 (${sanitized.slice(0, 2)}) ${sanitized.slice(2, 5)}-${sanitized.slice(5)}`;
-      return `+994 (${sanitized.slice(0, 2)}) ${sanitized.slice(2, 5)}-${sanitized.slice(5, 7)}-${sanitized.slice(7, 9)}`;
-    })() : '';
+    const formatted = formattedPhoneValue(sanitized);
     customerPhoneInput.value = formatted;
+    customerPhoneInput.setCustomValidity(sanitized.length === 9 ? '' : 'Mobil nömrə 9 rəqəmli olmalıdır.');
   });
+
+  function formattedPhoneValue(value) {
+    const digits = sanitizePhone(value);
+    if (!digits) return '';
+    if (digits.length <= 2) return `+994 ${digits}`;
+    if (digits.length <= 5) return `+994 ${digits.slice(0, 2)} ${digits.slice(2)}`;
+    if (digits.length <= 7) return `+994 ${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5)}`;
+    return `+994 ${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5, 7)} ${digits.slice(7, 9)}`;
+  }
 
   paymentForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -501,6 +507,11 @@
 
     if (!payload.customer_name || !payload.customer_phone || !payload.service_name) {
       setMessage('Ad, telefon və xidmət sahələrini doldurun.', 'error');
+      return;
+    }
+
+    if (payload.customer_phone.length !== 9) {
+      setMessage('Mobil nömrə düzgün yazılmalıdır. Məsələn: +994 50 123 45 67', 'error');
       return;
     }
 
@@ -603,7 +614,6 @@
     const sessionId = localStorage.getItem('bakuservis-chat-session') || `customer-${Date.now()}`;
     localStorage.setItem('bakuservis-chat-session', sessionId);
 
-    const chatToggle = document.getElementById('chat-toggle');
     const chatToggleBtn = document.getElementById('chat-toggle-btn');
     const chatPanel = document.getElementById('chat-panel');
     const chatMessages = document.getElementById('customer-chat-messages');
@@ -615,8 +625,13 @@
     function setChatOpen(isOpen) {
       if (!chatPanel) return;
       chatPanel.style.display = isOpen ? 'block' : 'none';
+      chatPanel.classList.toggle('is-open', isOpen);
+      chatPanel.setAttribute('aria-hidden', String(!isOpen));
       if (chatToggleBtn) {
         chatToggleBtn.setAttribute('aria-expanded', String(isOpen));
+      }
+      if (isOpen && chatInput) {
+        requestAnimationFrame(() => chatInput.focus({ preventScroll: true }));
       }
     }
 
@@ -674,11 +689,6 @@
       }
     }
 
-    chatToggle?.addEventListener('click', () => {
-      const isVisible = chatPanel && chatPanel.style.display !== 'none';
-      setChatOpen(!isVisible);
-    });
-
     chatToggleBtn?.addEventListener('click', async () => {
       const isVisible = chatPanel && chatPanel.style.display !== 'none';
       const nextState = !isVisible;
@@ -687,6 +697,8 @@
         await showInitialGreeting();
       }
     });
+
+    chatInput?.addEventListener('focus', () => setChatOpen(true));
 
     closeChat?.addEventListener('click', () => {
       setChatOpen(false);

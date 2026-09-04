@@ -10,7 +10,7 @@ const sqlite3 = require('sqlite3').verbose();
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const DATA_DIR = path.join(__dirname, 'data');
-const DB_PATH = path.join(DATA_DIR, 'bakuservis.sqlite');
+const DB_PATH = path.join(DATA_DIR, 'bakuservis.db');
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const db = new sqlite3.Database(DB_PATH);
@@ -87,7 +87,7 @@ function getKnowledgeBaseReply(message, historyMessages = []) {
   const totalCustomerTurns = customerHistory.length;
 
   if (!text) {
-    return 'Salam! Baku Servis peşəkar texniki dəstək mərkəzinə xoş gəlmisiniz. Sizə necə kömək edə bilərəm? 🛠️';
+    return 'Salam! Baku Servis IT Support və texniki xidmət mərkəzinə xoş gəlmisiniz. Sizə necə kömək edə bilərəm? 🛠️';
   }
 
   if (hasRepeatedTopic(message, historyMessages) || totalCustomerTurns >= 3 || (!intent && text.length >= 5)) {
@@ -95,7 +95,7 @@ function getKnowledgeBaseReply(message, historyMessages = []) {
   }
 
   if (intent === 'greeting') {
-    return 'Salam! Necəsiniz? Baku Servis peşəkar texniki dəstək mərkəzinə xoş gəlmisiniz. Sizə necə kömək edə bilərəm? 🛠️';
+    return 'Salam! Necəsiniz? Baku Servis IT Support və texniki xidmət mərkəzinə xoş gəlmisiniz. Sizə necə kömək edə bilərəm? 🛠️';
   }
 
   if (intent === 'courtesy') {
@@ -262,22 +262,18 @@ async function ensureDatabase() {
     await run('ALTER TABLE services ADD COLUMN price REAL DEFAULT 0');
   }
 
-  const admin = await get('SELECT id, password_hash FROM admins WHERE username = ?', [ADMIN_USERNAME]);
-  const passwordHash = bcrypt.hashSync(ADMIN_PASSWORD, 10);
-
+  const admin = await get('SELECT id FROM admins WHERE username = ?', [ADMIN_USERNAME]);
   if (!admin) {
+    const passwordHash = bcrypt.hashSync(ADMIN_PASSWORD, 10);
     await run('INSERT INTO admins (username, password_hash) VALUES (?, ?)', [ADMIN_USERNAME, passwordHash]);
     console.log(`Default admin created: ${ADMIN_USERNAME}`);
-  } else if (!bcrypt.compareSync(ADMIN_PASSWORD, admin.password_hash)) {
-    await run('UPDATE admins SET password_hash = ? WHERE username = ?', [passwordHash, ADMIN_USERNAME]);
-    console.log(`Admin password reset for ${ADMIN_USERNAME}`);
   }
 
   const seedServices = [
-    ['Format', 'Laptop'],
-    ['Virus Təmizliyi', 'Komputer'],
-    ['SSD Quraşdırma', 'Hardware'],
-    ['BIOS reset', 'Hardware']
+    ['Phone Diagnostic & Repair', 'Personal Tech'],
+    ['Laptop Maintenance & Repair', 'Personal Tech'],
+    ['Corporate IT Support', 'Corporate IT Support'],
+    ['Server & Network Management', 'Server/Network Management']
   ];
 
   for (const [name, category] of seedServices) {
@@ -321,7 +317,7 @@ app.use((req, res, next) => {
     "base-uri 'self'",
     "object-src 'none'",
     "frame-ancestors 'none'",
-    "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https: https://unpkg.com https://cdn.jsdelivr.net",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com",
     "font-src 'self' https://fonts.gstatic.com https://fonts.googleapis.com data:",
     "img-src 'self' data: https: blob:",
