@@ -142,6 +142,133 @@
         </div>
       </section>
 
+      <section class="section brand-showcase">
+        <div class="container showcase-grid">
+          <div class="showcase-copy">
+            <span class="eyebrow">Niyə Baku Servis?</span>
+            <h2>Texnologiya problemləri üçün peşəkar dəstək və sürətli həll</h2>
+            <p>
+              Biz telefon, laptop, server, şəbəkə və biznes IT sistemlərinin diaqnostikasını, təmirini və monitorinqini bir yerə toplayırıq.
+              Sizin cihazınızı yalnız bərpa etmirik — onun iş qabiliyyətini, təhlükəsizliyini və davamlılığını təmin edirik.
+            </p>
+
+            <ul class="trust-list">
+              <li>Peşəkar diaqnostika və operativ geri dönüş</li>
+              <li>Şəxsi və korporativ IT dəstəyi</li>
+              <li>Server, şəbəkə və sistem idarəetməsi</li>
+              <li>Azərbaycan bazarı üçün yerli dəstək və asan əlaqə</li>
+            </ul>
+
+            <div class="showcase-actions">
+              <a href="#request-panel" class="btn btn-primary">Texniki yardım alın</a>
+              <a href="#track" class="btn btn-outline">Status yoxlayın</a>
+            </div>
+          </div>
+
+          <div class="showcase-visual" aria-label="IT xidməti vizualı">
+            <div class="visual-card main-card">
+              <div class="visual-header">
+                <span class="dot dot-green"></span>
+                <span class="dot dot-amber"></span>
+                <span class="dot dot-blue"></span>
+              </div>
+              <div class="device-scene">
+                <div class="laptop-panel">
+                  <div class="screen-glow"></div>
+                  <div class="screen-lines"></div>
+                </div>
+                <div class="phone-panel">
+                  <div class="phone-notch"></div>
+                  <div class="phone-ui"></div>
+                </div>
+              </div>
+              <div class="visual-stats">
+                <div>
+                  <strong>24/7</strong>
+                  <span>Dəstək</span>
+                </div>
+                <div>
+                  <strong>48h</strong>
+                  <span>Orta cavab</span>
+                </div>
+                <div>
+                  <strong>99%</strong>
+                  <span>Razılaşma</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="mini-panel mini-panel-top">
+              <span class="mini-label">Server</span>
+              <strong>Network Uptime</strong>
+              <div class="bars">
+                <span></span><span></span><span></span><span></span><span></span>
+              </div>
+            </div>
+
+            <div class="mini-panel mini-panel-bottom">
+              <span class="mini-label">IT Support</span>
+              <strong>Remote diagnostics</strong>
+              <div class="pulse-ring"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section capability-section">
+        <div class="container">
+          <div class="section-head center-head">
+            <span class="eyebrow">Biz nə edirik?</span>
+            <h2>İT xidmətləri üçün tam həll</h2>
+          </div>
+
+          <div class="capability-grid">
+            <article class="capability-card capability-card-primary">
+              <div class="capability-icon">📱</div>
+              <div class="capability-body">
+                <h3>Şəxsi Texnologiyalar</h3>
+                <p>Telefon, tablet və laptop üçün ekran dəyişimi, batareya, program təminatı, şəbəkə və data bərpası.</p>
+              </div>
+            </article>
+
+            <article class="capability-card">
+              <div class="capability-icon">💼</div>
+              <div class="capability-body">
+                <h3>Korporativ IT Dəstək</h3>
+                <p>İş yeri cihazları, antivirus, işçi kompüterlərinin optimallaşdırılması və daimi texniki dəstək.</p>
+              </div>
+            </article>
+
+            <article class="capability-card">
+              <div class="capability-icon">🖥️</div>
+              <div class="capability-body">
+                <h3>Server və Şəbəkə</h3>
+                <p>Server monitorinqi, şəbəkə xəta ayırma, təhlükəsizlik, sənəd mübadiləsi və işgüzar sistemlərin işçi vəziyyəti.</p>
+              </div>
+            </article>
+          </div>
+
+          <div class="stats-row">
+            <div class="stat-box">
+              <strong>1,200+</strong>
+              <span>Təmir və xidmət</span>
+            </div>
+            <div class="stat-box">
+              <strong>2.4h</strong>
+              <span>Orta ilkin cavab</span>
+            </div>
+            <div class="stat-box">
+              <strong>99.1%</strong>
+              <span>Uğurlu həll dərəcəsi</span>
+            </div>
+            <div class="stat-box">
+              <strong>24/7</strong>
+              <span>İT dəstək</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section class="section section-alt" id="order-section">
         <div class="container" id="request-panel">
           <div class="section-head">
@@ -207,32 +334,43 @@
               </form>
             </div>
 
-            <div class="form-card" id="track">
-              <h3>İzləmə</h3>
-              <form id="track-form" novalidate>
+            <div class="form-card tracking-card" id="track">
+              <div class="tracking-header">
+                <div>
+                  <span class="eyebrow">İzləmə</span>
+                  <h3>Servis statusu</h3>
+                </div>
+                <div class="mini-pill">Live</div>
+              </div>
+
+              <form id="track-form" novalidate class="tracking-form">
                 <div class="field">
                   <label for="tracking_code">İzləmə kodu</label>
                   <input id="tracking_code" type="text" placeholder="HG-ABCD12" required autocomplete="off" aria-label="İzləmə kodu" />
                 </div>
-                <button type="submit" class="btn btn-outline btn-block">Axtar</button>
+                <button type="submit" class="btn btn-primary btn-block">Axtar</button>
               </form>
 
               <div id="tracking-result" class="track-result" style="display: none;">
                 <div class="track-head">
                   <div>
+                    <div class="meta-label">Xidmət</div>
                     <h3 id="result-service">-</h3>
                     <div class="meta" id="result-device">-</div>
                   </div>
                   <span class="status-chip status-yeni" id="result-status">-</span>
                 </div>
 
-                <div class="meta" style="margin-top:16px;">Yaradılma: <span id="result-created">-</span></div>
-                <div class="meta" style="margin-top:8px;">Status yenilənmə: <span id="result-updated">-</span></div>
-                <div class="meta" style="margin-top:8px;">İlkin / Təklif Olunan Qiymət (₼): <span id="result-quoted">-</span></div>
-                <div class="meta" style="margin-top:8px;">Yekun Ödəniləcək Qiymət (₼): <span id="result-final">-</span></div>
-                <div class="meta" style="margin-top:8px;">Ödəniş üsulu: <span id="result-payment-method">-</span></div>
-                <div class="meta" style="margin-top:8px;">Ödəniş statusu: <span id="result-payment-status">-</span></div>
-                <div id="result-address-wrap" class="meta" style="margin-top:8px; display:none;">Ünvan: <span id="result-address">-</span></div>
+                <div class="tracking-details">
+                  <div class="meta"><span>Yaradılma</span><strong id="result-created">-</strong></div>
+                  <div class="meta"><span>Status yenilənmə</span><strong id="result-updated">-</strong></div>
+                  <div class="meta"><span>İlkin / Təklif olunan</span><strong id="result-quoted">-</strong></div>
+                  <div class="meta"><span>Yekun ödəniləcək</span><strong id="result-final">-</strong></div>
+                  <div class="meta"><span>Ödəniş üsulu</span><strong id="result-payment-method">-</strong></div>
+                  <div class="meta"><span>Ödəniş statusu</span><strong id="result-payment-status">-</strong></div>
+                  <div id="result-address-wrap" class="meta" style="display:none;"><span>Ünvan</span><strong id="result-address">-</strong></div>
+                </div>
+
                 <div id="post-submit-choice" class="post-submit-choice" style="display:none; margin-top: 18px;">
                   <div class="choice-title">Ödəniş seçimi</div>
                   <div class="choice-description">Bu sifariş hələ ödənilməmişdir.</div>
