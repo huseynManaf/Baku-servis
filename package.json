@@ -11,7 +11,6 @@
     "cap:open-android": "npx cap open android",
     "cap:copy": "npx cap copy",
     "cap:sync": "npx cap sync"
-   
   },
   "dependencies": {
     "@capacitor/android": "^5.0.4",
@@ -22,7 +21,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-session": "^1.18.0",
-    "nodemailer": "^6.9.14",
+    "nodemailer": "^6.10.1",
     "pg": "^8.23.0",
     "socket.io": "^4.8.1",
     "sqlite3": "5.1.7"
