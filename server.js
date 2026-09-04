@@ -184,37 +184,43 @@ function buildNotificationHtml({ title, details, summary }) {
 }
 
 function sendAdminEmail({ title, summary, details }) {
-  const transporter = (() => {
-    if (!SMTP_PASS) {
-      console.warn('SMTP_PASS is not configured; skipping email notification.');
-      return null;
-    }
-
-    return nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: SMTP_PORT,
-      secure: SMTP_SECURE,
-      auth: {
-        user: SMTP_USER,
-        pass: SMTP_PASS
+  try {
+    const transporter = (() => {
+      if (!SMTP_PASS) {
+        console.warn('SMTP_PASS is not configured; skipping email notification.');
+        return null;
       }
+
+      return nodemailer.createTransport({
+        host: SMTP_HOST,
+        port: SMTP_PORT,
+        secure: SMTP_SECURE,
+        auth: {
+          user: SMTP_USER,
+          pass: SMTP_PASS
+        }
+      });
+    })();
+
+    if (!transporter) return Promise.resolve();
+
+    const subject = title;
+    const text = `${summary}\n\n${Object.entries(details || {}).map(([key, value]) => `${key}: ${value}`).join('\n')}`;
+
+    return transporter.sendMail({
+      from: MAIL_FROM,
+      to: ADMIN_EMAIL,
+      subject,
+      text,
+      html: buildNotificationHtml({ title, summary, details })
+    }).catch((error) => {
+      console.error('Email notification failed (non-blocking):', error);
+      return null;
     });
-  })();
-
-  if (!transporter) return Promise.resolve();
-
-  const subject = title;
-  const text = `${summary}\n\n${Object.entries(details || {}).map(([key, value]) => `${key}: ${value}`).join('\n')}`;
-
-  return transporter.sendMail({
-    from: MAIL_FROM,
-    to: ADMIN_EMAIL,
-    subject,
-    text,
-    html: buildNotificationHtml({ title, summary, details })
-  }).catch((error) => {
-    console.error('Email notification failed:', error);
-  });
+  } catch (error) {
+    console.error('Email notification setup failed (non-blocking):', error);
+    return Promise.resolve();
+  }
 }
 
 function emitAdminNotification(payload) {
@@ -272,7 +278,51 @@ function all(sql, params = []) {
   });
 }
 
+async function ensureOrdersTable() {
+  await run(`
+    CREATE TABLE IF NOT EXISTS orders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tracking_code TEXT UNIQUE NOT NULL,
+      customer_name TEXT NOT NULL,
+      customer_phone TEXT NOT NULL,
+      service_name TEXT NOT NULL,
+      device_info TEXT,
+      status TEXT NOT NULL DEFAULT 'Gözləmədə',
+      quoted_price REAL DEFAULT 0,
+      final_price REAL DEFAULT 0,
+      is_onsite INTEGER NOT NULL DEFAULT 0,
+      address TEXT,
+      latitude REAL,
+      longitude REAL,
+      payment_method TEXT NOT NULL DEFAULT 'later',
+      payment_status TEXT NOT NULL DEFAULT 'Ödənilməyib',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  const orderColumns = new Set((await all('PRAGMA table_info(orders)')).map((col) => col.name));
+  const orderColumnsToAdd = ['is_onsite', 'address', 'latitude', 'longitude', 'payment_method', 'payment_status', 'quoted_price', 'final_price'];
+  for (const column of orderColumnsToAdd) {
+    if (!orderColumns.has(column)) {
+      const typeMap = {
+        quoted_price: 'REAL DEFAULT 0',
+        final_price: 'REAL DEFAULT 0',
+        is_onsite: 'INTEGER NOT NULL DEFAULT 0',
+        address: 'TEXT',
+        latitude: 'REAL',
+        longitude: 'REAL',
+        payment_method: "TEXT NOT NULL DEFAULT 'later'",
+        payment_status: "TEXT NOT NULL DEFAULT 'Ödənilməyib'"
+      };
+      await run(`ALTER TABLE orders ADD COLUMN ${column} ${typeMap[column]}`);
+    }
+  }
+}
+
 async function ensureDatabase() {
+  await ensureOrdersTable();
+
   await run(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -637,10 +687,35 @@ app.post('/api/requests', async (req, res) => {
     const tracking_code = generateTrackingCode();
     const timestamp = nowIso();
     const paymentStatus = normalizedPaymentMethod === 'prepay' ? 'Ödənilməyib' : 'Təhvil Veriləndə Ödənəcək';
+
+    const requestInsert = [
+      tracking_code,
+      customer_name,
+      customer_phone,
+      service_name,
+      device_info || null,
+      'Gözləmədə',
+      0,
+      0,
+      is_onsite ? 1 : 0,
+      address || null,
+      Number.isFinite(latitude) ? latitude : null,
+      Number.isFinite(longitude) ? longitude : null,
+      normalizedPaymentMethod,
+      paymentStatus,
+      timestamp,
+      timestamp
+    ];
+
     const result = await run(`
       INSERT INTO requests (tracking_code, customer_name, customer_phone, service_name, device_info, status, quoted_price, final_price, is_onsite, address, latitude, longitude, payment_method, payment_status, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [tracking_code, customer_name, customer_phone, service_name, device_info || null, 'Gözləmədə', 0, 0, is_onsite ? 1 : 0, address || null, Number.isFinite(latitude) ? latitude : null, Number.isFinite(longitude) ? longitude : null, normalizedPaymentMethod, paymentStatus, timestamp, timestamp]);
+    `, requestInsert);
+
+    const orderResult = await run(`
+      INSERT INTO orders (tracking_code, customer_name, customer_phone, service_name, device_info, status, quoted_price, final_price, is_onsite, address, latitude, longitude, payment_method, payment_status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, requestInsert);
 
     emitAdminNotification({
       title: 'Yeni müraciət',
@@ -654,7 +729,7 @@ app.post('/api/requests', async (req, res) => {
       }
     });
 
-    await sendAdminEmail({
+    void sendAdminEmail({
       title: 'Baku Servis — Yeni müraciət',
       summary: 'Sistemə yeni xidmət müraciəti daxil olub.',
       details: {
@@ -667,11 +742,14 @@ app.post('/api/requests', async (req, res) => {
         'Ödəniş üsulu': normalizedPaymentMethod,
         'İzləmə kodu': tracking_code
       }
+    }).catch((emailError) => {
+      console.error('Email notification failed (non-blocking):', emailError);
     });
 
-    return res.status(201).json({
+    return res.status(200).json({
       ok: true,
-      request_id: result.lastInsertRowid,
+      success: true,
+      request_id: result.lastInsertRowid || orderResult.lastInsertRowid,
       tracking_code,
       payment_method: normalizedPaymentMethod,
       payment_status: paymentStatus,
@@ -968,7 +1046,7 @@ app.post('/api/chat/send', async (req, res) => {
         meta: { session_id: sessionId, sender_type: 'customer' }
       });
 
-      await sendAdminEmail({
+      void sendAdminEmail({
         title: 'Baku Servis — Canlı chat mesajı',
         summary: 'Canlı çatda yeni müştəri mesajı daxil olub.',
         details: {
@@ -976,6 +1054,8 @@ app.post('/api/chat/send', async (req, res) => {
           'Müştəri mesajı': message,
           'Bot cavabı': botReply
         }
+      }).catch((emailError) => {
+        console.error('Email notification failed (non-blocking):', emailError);
       });
 
       return res.status(201).json({ ok: true, message: row, bot_message: botRow, reply: botReply });

@@ -29,6 +29,7 @@
   const resultPaymentMethod = document.getElementById('result-payment-method');
   const customerPhoneInput = document.getElementById('customer_phone');
   const postSubmitChoice = document.getElementById('post-submit-choice');
+  const paymentConfirmation = document.getElementById('payment-confirmation');
   const payNowBtn = document.getElementById('pay-now-btn');
   const payLaterBtn = document.getElementById('pay-later-btn');
   let activeTrackingId = null;
@@ -349,14 +350,33 @@
     });
   }
 
+  function setPaymentConfirmation(isVisible, message = '✅ Ödəniş üsulu təsdiqləndi: Təhvil veriləndə ödəniləcək') {
+    if (!paymentConfirmation) return;
+    paymentConfirmation.style.display = isVisible ? 'block' : 'none';
+    paymentConfirmation.textContent = message;
+  }
+
   function showPaymentChoicePanel(request = null) {
     if (!postSubmitChoice) return;
+
+    const normalizedPaymentMethod = String(request?.payment_method || '').toLowerCase();
+    const normalizedPaymentStatus = String(request?.payment_status || '').toLowerCase();
+    const shouldConfirmCash = normalizedPaymentMethod === 'later' || normalizedPaymentStatus.includes('təhvil') || normalizedPaymentStatus.includes('veril') || normalizedPaymentStatus.includes('cash');
+
     if (!request || (request.payment_status || 'Ödənilməyib') === 'Ödənilib') {
       postSubmitChoice.style.display = 'none';
+      setPaymentConfirmation(false);
+      return;
+    }
+
+    if (shouldConfirmCash) {
+      postSubmitChoice.style.display = 'none';
+      setPaymentConfirmation(true, '✅ Ödəniş üsulu təsdiqləndi: Təhvil veriləndə ödəniləcək');
       return;
     }
 
     postSubmitChoice.style.display = 'block';
+    setPaymentConfirmation(false);
     postSubmitChoice.dataset.requestId = request.id || activeTrackingId || '';
 
     const text = request.payment_method === 'prepay'
@@ -390,6 +410,7 @@
             return;
           }
           postSubmitChoice.style.display = 'none';
+          setPaymentConfirmation(true, '✅ Ödəniş üsulu təsdiqləndi: Təhvil veriləndə ödəniləcək');
           showToast('Sifariş “Təhvil veriləndə ödənəcək” kimi qeydləndi.', 'success');
           if (resultPaymentStatus) {
             resultPaymentStatus.textContent = body.payment_status || 'Təhvil veriləndə ödənəcək';
@@ -527,8 +548,10 @@
         body: JSON.stringify(payload)
       });
 
-      const body = await response.json();
-      if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      const isSuccess = response.ok && (body.success !== false) && (!!body.tracking_code || !!body.request_id || !!body.ok);
+
+      if (!isSuccess) {
         setMessage(body.error || 'Müraciət göndərilmədi.', 'error');
         return;
       }
@@ -540,7 +563,7 @@
       if (onsiteLatInput) onsiteLatInput.value = '';
       if (onsiteLngInput) onsiteLngInput.value = '';
       if (paymentMethodSelect) paymentMethodSelect.value = 'prepay';
-      setMessage(`Müraciət yarandı. İzləmə kodu: ${body.tracking_code} · ${body.created_at}`, 'success');
+      setMessage(`Müraciət yarandı. İzləmə kodu: ${body.tracking_code || 'HG-XXXXXX'} · ${body.created_at || 'indiki vaxt'}`, 'success');
 
       if (body.request_id) {
         activeTrackingId = Number(body.request_id);
