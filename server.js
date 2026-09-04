@@ -339,6 +339,38 @@ async function ensureOrdersTable() {
   }
 }
 
+async function safeAddColumn(tableName, columnName, columnType = 'TEXT', defaultExpression = '') {
+  try {
+    const tableInfo = await all(`PRAGMA table_info(${tableName})`);
+    const exists = new Set((tableInfo || []).map((column) => column.name));
+    if (exists.has(columnName)) {
+      return;
+    }
+
+    const definition = defaultExpression ? `${columnType} ${defaultExpression}` : columnType;
+    await run(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+  } catch (error) {
+    console.warn(`Schema migration warning for ${tableName}.${columnName}:`, error.message || error);
+  }
+}
+
+async function ensureChatMessagesTable() {
+  await run(`
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL,
+      sender_type TEXT NOT NULL CHECK(sender_type IN ('customer', 'admin', 'bot')),
+      message TEXT NOT NULL,
+      customer_name TEXT,
+      customer_phone TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  await safeAddColumn('chat_messages', 'customer_name', 'TEXT');
+  await safeAddColumn('chat_messages', 'customer_phone', 'TEXT');
+}
+
 async function ensureDatabase() {
   await ensureOrdersTable();
 
@@ -386,12 +418,7 @@ async function ensureDatabase() {
     )
   `);
 
-  const chatMessageColumns = new Set((await all('PRAGMA table_info(chat_messages)')).map((col) => col.name));
-  for (const column of ['customer_name', 'customer_phone']) {
-    if (!chatMessageColumns.has(column)) {
-      await run(`ALTER TABLE chat_messages ADD COLUMN ${column} ${column === 'customer_phone' ? 'TEXT' : 'TEXT'}`);
-    }
-  }
+  await ensureChatMessagesTable();
 
   await run(`
     CREATE TABLE IF NOT EXISTS requests (
@@ -419,27 +446,33 @@ async function ensureDatabase() {
   const chatTableDefinition = await get("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'chat_messages'");
   if (!chatTableDefinition || !chatTableDefinition.sql || !chatTableDefinition.sql.includes("'bot'")) {
     const migrateChatTable = async () => {
-      const existingRows = await all('SELECT * FROM chat_messages ORDER BY id ASC');
-      await run('ALTER TABLE chat_messages RENAME TO chat_messages_old');
-      await run(`
-        CREATE TABLE chat_messages (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          session_id TEXT NOT NULL,
-          sender_type TEXT NOT NULL CHECK(sender_type IN ('customer', 'admin', 'bot')),
-          message TEXT NOT NULL,
-          created_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )
-      `);
-      if (existingRows.length) {
-        const columns = ['id', 'session_id', 'sender_type', 'message', 'created_at'];
-        for (const row of existingRows) {
-          await run(
-            `INSERT INTO chat_messages (${columns.join(', ')}) VALUES (?, ?, ?, ?, ?)`,
-            [row.id, row.session_id, row.sender_type, row.message, row.created_at]
-          );
+      try {
+        const existingRows = await all('SELECT * FROM chat_messages ORDER BY id ASC');
+        await run('ALTER TABLE chat_messages RENAME TO chat_messages_old');
+        await run(`
+          CREATE TABLE chat_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            sender_type TEXT NOT NULL CHECK(sender_type IN ('customer', 'admin', 'bot')),
+            message TEXT NOT NULL,
+            customer_name TEXT,
+            customer_phone TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+          )
+        `);
+        if (existingRows.length) {
+          const columns = ['id', 'session_id', 'sender_type', 'message', 'customer_name', 'customer_phone', 'created_at'];
+          for (const row of existingRows) {
+            await run(
+              `INSERT INTO chat_messages (${columns.join(', ')}) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+              [row.id, row.session_id, row.sender_type, row.message, row.customer_name || null, row.customer_phone || null, row.created_at]
+            );
+          }
         }
+        await run('DROP TABLE chat_messages_old');
+      } catch (error) {
+        console.warn('Schema migration warning for chat_messages:', error.message || error);
       }
-      await run('DROP TABLE chat_messages_old');
     };
 
     const tableExists = await get("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'chat_messages'");
@@ -452,6 +485,8 @@ async function ensureDatabase() {
           session_id TEXT NOT NULL,
           sender_type TEXT NOT NULL CHECK(sender_type IN ('customer', 'admin', 'bot')),
           message TEXT NOT NULL,
+          customer_name TEXT,
+          customer_phone TEXT,
           created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
       `);
