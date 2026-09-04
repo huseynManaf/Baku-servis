@@ -624,6 +624,35 @@ app.get('/health', (req, res) => {
   res.status(200).send('Baku Servis backend is running!');
 });
 
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain').send([
+    'User-agent: *',
+    'Allow: /',
+    'Sitemap: https://bakuservis.az/sitemap.xml'
+  ].join('\n'));
+});
+
+app.get('/sitemap.xml', (req, res) => {
+  const lastmod = new Date().toISOString().split('T')[0];
+  const urls = [
+    { loc: 'https://bakuservis.az/', priority: '1.0', changefreq: 'daily' },
+    { loc: 'https://bakuservis.az/#services', priority: '0.8', changefreq: 'weekly' },
+    { loc: 'https://bakuservis.az/#request-panel', priority: '0.8', changefreq: 'weekly' },
+    { loc: 'https://bakuservis.az/#track', priority: '0.7', changefreq: 'weekly' }
+  ];
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls.map(({ loc, priority, changefreq }) => `  <url>
+    <loc>${loc}</loc>
+    <lastmod>${lastmod}</lastmod>
+    <changefreq>${changefreq}</changefreq>
+    <priority>${priority}</priority>
+  </url>`).join('\n')}
+</urlset>`;
+
+  res.type('application/xml').send(xml);
+});
+
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
