@@ -32,6 +32,7 @@
   const paymentConfirmation = document.getElementById('payment-confirmation');
   const payNowBtn = document.getElementById('pay-now-btn');
   const payLaterBtn = document.getElementById('pay-later-btn');
+  const liveBoard = document.getElementById('live-board');
   let activeTrackingId = null;
 
   const onsiteToggle = document.getElementById('is_onsite');
@@ -92,6 +93,24 @@
     root.classList.toggle('theme-light', resolved === 'light');
     if (themeToggle) themeToggle.textContent = resolved === 'light' ? 'Qaranlıq' : 'Açıq';
     localStorage.setItem('bakuservis-theme', resolved);
+  }
+
+  function getStoredCustomerIdentity() {
+    try {
+      const raw = localStorage.getItem('bakuservis-customer-identity');
+      return raw ? JSON.parse(raw) : { name: '', phone: '' };
+    } catch (error) {
+      return { name: '', phone: '' };
+    }
+  }
+
+  function setStoredCustomerIdentity(name, phone) {
+    const next = {
+      name: String(name || '').trim(),
+      phone: String(phone || '').trim()
+    };
+    localStorage.setItem('bakuservis-customer-identity', JSON.stringify(next));
+    return next;
   }
 
   function isWithinAzerbaijan(lat, lng) {
@@ -192,6 +211,59 @@
     return true;
   }
 
+  function getLiveBoardStatusClass(status) {
+    const value = String(status || '').trim().toLowerCase();
+    if (value.includes('gözləm') || value.includes('pending')) return 'status-yeni';
+    if (value.includes('icra') || value.includes('in work') || value.includes('process')) return 'status-icrada';
+    if (value.includes('hazır') || value.includes('ready')) return 'status-hazir';
+    if (value.includes('təhvil') || value.includes('verildi') || value.includes('delivered')) return 'status-teslim';
+    return 'status-qiymetlendirildi';
+  }
+
+  function getLiveBoardStatusLabel(status) {
+    const value = String(status || '').trim();
+    if (!value) return 'Gözləmədə';
+    if (value.toLowerCase().includes('gözləm')) return 'Gözləmədə';
+    if (value.toLowerCase().includes('icra')) return 'İcrada';
+    if (value.toLowerCase().includes('hazır')) return 'Hazırdır';
+    if (value.toLowerCase().includes('təhvil') || value.toLowerCase().includes('verildi')) return 'Təhvil verildi';
+    return value;
+  }
+
+  function renderLiveBoard(orders) {
+    if (!liveBoard) return;
+
+    const fallback = [
+      { service_name: 'Laptop Format', device_model: 'Lenovo ThinkPad', status: 'İcrada' },
+      { service_name: 'Virus Təmizliyi', device_model: 'HP Pavilion', status: 'Hazırdır' },
+      { service_name: 'SSD Quraşdırma', device_model: 'Dell Latitude', status: 'Qiymətləndirildi' },
+      { service_name: 'BIOS Reset', device_model: 'Acer Aspire', status: 'Gözləmədə' }
+    ];
+
+    const items = Array.isArray(orders) && orders.length ? orders : fallback;
+    liveBoard.innerHTML = items.map((item) => `
+      <div class="ticket">
+        <div>
+          <div class="tname">${String(item.service_name || 'Xidmət').trim() || 'Xidmət'}</div>
+          <div class="tdev">${String(item.device_model || 'Model bilinmir').trim() || 'Model bilinmir'}</div>
+        </div>
+        <span class="status-chip ${getLiveBoardStatusClass(item.status)}">${getLiveBoardStatusLabel(item.status)}</span>
+      </div>
+    `).join('');
+  }
+
+  async function refreshLiveBoard() {
+    try {
+      const response = await fetch('/api/orders/live-board');
+      if (!response.ok) throw new Error(`Live board request failed: ${response.status}`);
+      const data = await response.json();
+      renderLiveBoard(Array.isArray(data.orders) ? data.orders : []);
+    } catch (error) {
+      console.error('refreshLiveBoard error:', error);
+      renderLiveBoard([]);
+    }
+  }
+
   function populateServices(services) {
     if (!serviceSelect) return;
     serviceSelect.innerHTML = '<option value="">Seçin</option>' + (services || []).map((service) => (
@@ -267,10 +339,27 @@
 
     if (!onSiteMap) {
       onSiteMap = L.map('onsite-map', { zoomControl: true }).setView([40.4093, 49.8671], 10);
+      window.map = onSiteMap;
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution: '&copy; OpenStreetMap contributors'
       }).addTo(onSiteMap);
+
+      setTimeout(() => {
+        if (window.map) {
+          window.map.invalidateSize();
+          window.map.setView([40.4093, 49.8671], 12);
+        }
+      }, 200);
+
+      window.addEventListener('load', () => {
+        setTimeout(() => {
+          if (window.map) {
+            window.map.invalidateSize();
+            window.map.setView([40.4093, 49.8671], 12);
+          }
+        }, 200);
+      });
 
       onSiteMap.on('click', async (event) => {
         const { lat, lng } = event.latlng;
@@ -303,6 +392,12 @@
     onsiteToggle?.addEventListener('change', () => {
       if (onsiteToggle.checked) {
         onsiteMapWrap.classList.add('visible');
+        setTimeout(() => {
+          if (window.map) {
+            window.map.invalidateSize();
+            window.map.setView([40.4093, 49.8671], 12);
+          }
+        }, 200);
       } else {
         onsiteMapWrap.classList.remove('visible');
       }
@@ -556,6 +651,10 @@
         return;
       }
 
+      const customerName = document.getElementById('customer_name').value.trim();
+      const customerPhone = sanitizePhone(document.getElementById('customer_phone').value);
+      setStoredCustomerIdentity(customerName, customerPhone);
+
       requestForm.reset();
       if (onsiteToggle) onsiteToggle.checked = false;
       if (onsiteMapWrap) onsiteMapWrap.classList.remove('visible');
@@ -599,6 +698,9 @@
 
       const request = body.request || {};
       activeTrackingId = request.id || null;
+      if (request.customer_name || request.customer_phone) {
+        setStoredCustomerIdentity(request.customer_name, request.customer_phone);
+      }
       resultService.textContent = request.service_name || '-';
       resultDevice.textContent = request.device_info || 'Cihaz məlumatı yoxdur';
       resultStatus.textContent = request.status || 'Gözləmədə';
@@ -636,6 +738,7 @@
   function initCustomerChat() {
     const sessionId = localStorage.getItem('bakuservis-chat-session') || `customer-${Date.now()}`;
     localStorage.setItem('bakuservis-chat-session', sessionId);
+    const identity = getStoredCustomerIdentity();
 
     const chatToggleBtn = document.getElementById('chat-toggle-btn');
     const chatPanel = document.getElementById('chat-panel');
@@ -667,7 +770,13 @@
         const response = await fetch('/api/chat/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: sessionId, sender_type: 'bot', message: greetingText })
+          body: JSON.stringify({
+            session_id: sessionId,
+            sender_type: 'bot',
+            message: greetingText,
+            customer_name: identity.name,
+            customer_phone: identity.phone
+          })
         });
 
         if (response.ok) {
@@ -732,10 +841,17 @@
       if (!message) return;
       if (chatInput) chatInput.value = '';
       try {
+        const identity = getStoredCustomerIdentity();
         await fetch('/api/chat/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: sessionId, sender_type: 'customer', message })
+          body: JSON.stringify({
+            session_id: sessionId,
+            sender_type: 'customer',
+            message,
+            customer_name: identity.name,
+            customer_phone: identity.phone
+          })
         });
         await loadChatHistory();
       } catch (error) {
@@ -764,4 +880,6 @@
   setupOnsiteMap();
   initCustomerChat();
   loadServices();
+  refreshLiveBoard();
+  setInterval(refreshLiveBoard, 15000);
 });

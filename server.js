@@ -63,6 +63,23 @@ function formatDate(value) {
   return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+function normalizePhone(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (!digits) return '';
+  const withoutCountry = digits.startsWith('994') ? digits.slice(3) : digits;
+  const withoutZero = withoutCountry.replace(/^0+/, '');
+  return withoutZero.slice(0, 9);
+}
+
+function formatPhoneDisplay(value) {
+  const digits = normalizePhone(value);
+  if (!digits) return '';
+  if (digits.length <= 2) return `+994 ${digits}`;
+  if (digits.length <= 5) return `+994 ${digits.slice(0, 2)} ${digits.slice(2)}`;
+  if (digits.length <= 7) return `+994 ${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5)}`;
+  return `+994 ${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5, 7)} ${digits.slice(7, 9)}`;
+}
+
 const BOT_HANDOFF_NOTICE = 'Anladım, məsələni tam dəqiqləşdirmək üçün müraciətinizi texniki operatorumuza yönləndirdim. ⏱️ Əməkdaşlarımız 15 dəqiqə ərzində bu canlı çat vasitəsilə sizə birbaşa cavab verəcək.';
 
 function normalizeBotText(value) {
@@ -185,40 +202,40 @@ function buildNotificationHtml({ title, details, summary }) {
 
 function sendAdminEmail({ title, summary, details }) {
   try {
-    const transporter = (() => {
-      if (!SMTP_PASS) {
-        console.warn('SMTP_PASS is not configured; skipping email notification.');
-        return null;
+    const gmailUser = process.env.GMAIL_USER || process.env.EMAIL_USER || SMTP_USER;
+    const gmailAppPassword = process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASS || SMTP_PASS;
+
+    if (!gmailUser || !gmailAppPassword) {
+      console.warn('Gmail credentials are not configured; skipping email notification.');
+      return Promise.resolve();
+    }
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: gmailUser,
+        pass: gmailAppPassword
       }
-
-      return nodemailer.createTransport({
-        host: SMTP_HOST,
-        port: SMTP_PORT,
-        secure: SMTP_SECURE,
-        auth: {
-          user: SMTP_USER,
-          pass: SMTP_PASS
-        }
-      });
-    })();
-
-    if (!transporter) return Promise.resolve();
+    });
 
     const subject = title;
     const text = `${summary}\n\n${Object.entries(details || {}).map(([key, value]) => `${key}: ${value}`).join('\n')}`;
 
     return transporter.sendMail({
-      from: MAIL_FROM,
-      to: ADMIN_EMAIL,
+      from: process.env.GMAIL_USER || process.env.EMAIL_USER || MAIL_FROM,
+      to: process.env.NOTIFICATION_EMAIL || process.env.GMAIL_USER || ADMIN_EMAIL,
       subject,
       text,
       html: buildNotificationHtml({ title, summary, details })
-    }).catch((error) => {
-      console.error('Email notification failed (non-blocking):', error);
+    }).then((info) => {
+      console.log('✅ Email sent successfully:', info.response);
+      return info;
+    }).catch((err) => {
+      console.error('❌ Email error:', err);
       return null;
     });
   } catch (error) {
-    console.error('Email notification setup failed (non-blocking):', error);
+    console.error('❌ Email error:', error);
     return Promise.resolve();
   }
 }
@@ -286,6 +303,7 @@ async function ensureOrdersTable() {
       customer_name TEXT NOT NULL,
       customer_phone TEXT NOT NULL,
       service_name TEXT NOT NULL,
+      device_model TEXT,
       device_info TEXT,
       status TEXT NOT NULL DEFAULT 'Gözləmədə',
       quoted_price REAL DEFAULT 0,
@@ -302,10 +320,11 @@ async function ensureOrdersTable() {
   `);
 
   const orderColumns = new Set((await all('PRAGMA table_info(orders)')).map((col) => col.name));
-  const orderColumnsToAdd = ['is_onsite', 'address', 'latitude', 'longitude', 'payment_method', 'payment_status', 'quoted_price', 'final_price'];
+  const orderColumnsToAdd = ['device_model', 'is_onsite', 'address', 'latitude', 'longitude', 'payment_method', 'payment_status', 'quoted_price', 'final_price'];
   for (const column of orderColumnsToAdd) {
     if (!orderColumns.has(column)) {
       const typeMap = {
+        device_model: 'TEXT',
         quoted_price: 'REAL DEFAULT 0',
         final_price: 'REAL DEFAULT 0',
         is_onsite: 'INTEGER NOT NULL DEFAULT 0',
@@ -367,6 +386,13 @@ async function ensureDatabase() {
     )
   `);
 
+  const chatMessageColumns = new Set((await all('PRAGMA table_info(chat_messages)')).map((col) => col.name));
+  for (const column of ['customer_name', 'customer_phone']) {
+    if (!chatMessageColumns.has(column)) {
+      await run(`ALTER TABLE chat_messages ADD COLUMN ${column} ${column === 'customer_phone' ? 'TEXT' : 'TEXT'}`);
+    }
+  }
+
   await run(`
     CREATE TABLE IF NOT EXISTS requests (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -374,6 +400,7 @@ async function ensureDatabase() {
       customer_name TEXT NOT NULL,
       customer_phone TEXT NOT NULL,
       service_name TEXT NOT NULL,
+      device_model TEXT,
       device_info TEXT,
       status TEXT NOT NULL DEFAULT 'Gözləmədə',
       quoted_price REAL DEFAULT 0,
@@ -432,10 +459,11 @@ async function ensureDatabase() {
   }
 
   const requestColumns = new Set((await all('PRAGMA table_info(requests)')).map((col) => col.name));
-  const requestColumnsToAdd = ['is_onsite', 'address', 'latitude', 'longitude', 'payment_method', 'payment_status'];
+  const requestColumnsToAdd = ['device_model', 'is_onsite', 'address', 'latitude', 'longitude', 'payment_method', 'payment_status'];
   for (const column of requestColumnsToAdd) {
     if (!requestColumns.has(column)) {
       const typeMap = {
+        device_model: 'TEXT',
         is_onsite: 'INTEGER NOT NULL DEFAULT 0',
         address: 'TEXT',
         latitude: 'REAL',
@@ -655,12 +683,39 @@ app.delete('/api/admin/services/:id', requireAdmin, async (req, res) => {
   }
 });
 
+app.get('/api/orders/live-board', async (req, res) => {
+  try {
+    const rows = await all(`
+      SELECT id, service_name, COALESCE(device_model, device_info, 'Model bilinmir') AS device_model, status, created_at
+      FROM orders
+      ORDER BY created_at DESC
+      LIMIT 6
+    `);
+
+    return res.json({
+      ok: true,
+      orders: (rows || []).map((row) => ({
+        id: row.id,
+        service_name: row.service_name || 'Xidmət',
+        device_model: row.device_model || 'Model bilinmir',
+        status: row.status || 'Gözləmədə',
+        created_at: row.created_at
+      }))
+    });
+  } catch (error) {
+    console.error('GET /api/orders/live-board error:', error);
+    return res.status(500).json({ error: 'İzləmə lövhəsi yüklənə bilmədi.' });
+  }
+});
+
 app.post('/api/requests', async (req, res) => {
   try {
     const customer_name = String(req.body.customer_name || '').trim();
     const customer_phone = String(req.body.customer_phone || '').trim();
     const service_name = String(req.body.service_name || '').trim();
     const device_info = String(req.body.device_info || '').trim();
+    const device_model = String(req.body.device_model || device_info || '').trim();
+    const onsite_address = String(req.body.address || '').trim();
 
     if (!customer_name || !customer_phone || !service_name) {
       return res.status(400).json({ error: 'Ad, telefon və xidmət sahələri mütləqdir.' });
@@ -693,6 +748,7 @@ app.post('/api/requests', async (req, res) => {
       customer_name,
       customer_phone,
       service_name,
+      device_model || device_info || null,
       device_info || null,
       'Gözləmədə',
       0,
@@ -708,13 +764,13 @@ app.post('/api/requests', async (req, res) => {
     ];
 
     const result = await run(`
-      INSERT INTO requests (tracking_code, customer_name, customer_phone, service_name, device_info, status, quoted_price, final_price, is_onsite, address, latitude, longitude, payment_method, payment_status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO requests (tracking_code, customer_name, customer_phone, service_name, device_model, device_info, status, quoted_price, final_price, is_onsite, address, latitude, longitude, payment_method, payment_status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, requestInsert);
 
     const orderResult = await run(`
-      INSERT INTO orders (tracking_code, customer_name, customer_phone, service_name, device_info, status, quoted_price, final_price, is_onsite, address, latitude, longitude, payment_method, payment_status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO orders (tracking_code, customer_name, customer_phone, service_name, device_model, device_info, status, quoted_price, final_price, is_onsite, address, latitude, longitude, payment_method, payment_status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, requestInsert);
 
     emitAdminNotification({
@@ -730,21 +786,54 @@ app.post('/api/requests', async (req, res) => {
     });
 
     void sendAdminEmail({
-      title: 'Baku Servis — Yeni müraciət',
+      title: `🔔 Yeni Müraciət var: ${tracking_code}`,
       summary: 'Sistemə yeni xidmət müraciəti daxil olub.',
       details: {
         'Müştəri': customer_name,
         'Telefon': customer_phone,
         'Xidmət': service_name,
         'Cihaz': device_info || '-',
-        'Ünvan': address || '-',
+        'Ünvan / Yerləşmə': onsite_address || address || 'Servisdə',
         'Səyyar xidmət': is_onsite ? 'Bəli' : 'Xeyr',
         'Ödəniş üsulu': normalizedPaymentMethod,
         'İzləmə kodu': tracking_code
       }
     }).catch((emailError) => {
-      console.error('Email notification failed (non-blocking):', emailError);
+      console.error('❌ Email error:', emailError);
     });
+
+    const gmailTo = process.env.NOTIFICATION_EMAIL || process.env.GMAIL_USER || ADMIN_EMAIL;
+    const gmailFrom = process.env.GMAIL_USER || process.env.EMAIL_USER || MAIL_FROM;
+    const requestEmailHtml = `
+      <h3>Yeni Müraciət Daxil Oldu!</h3>
+      <p><b>Müştəri:</b> ${customer_name}</p>
+      <p><b>Telefon:</b> ${customer_phone}</p>
+      <p><b>Xidmət:</b> ${service_name}</p>
+      <p><b>Cihaz:</b> ${device_info || 'Qeyd edilməyib'}</p>
+      <p><b>Ünvan / Yerləşmə:</b> ${onsite_address || address || 'Servisdə'}</p>
+      <p><b>İzləmə Kodu:</b> ${tracking_code}</p>
+    `;
+
+    if (gmailTo && gmailFrom) {
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: process.env.GMAIL_USER || process.env.EMAIL_USER,
+          pass: process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASS
+        }
+      });
+
+      transporter.sendMail({
+        from: gmailFrom,
+        to: gmailTo,
+        subject: `🔔 Yeni Müraciət var: ${tracking_code}`,
+        html: requestEmailHtml
+      }).then((info) => {
+        console.log('✅ Email sent successfully:', info.response);
+      }).catch((err) => {
+        console.error('❌ Email error:', err);
+      });
+    }
 
     return res.status(200).json({
       ok: true,
@@ -764,11 +853,26 @@ app.post('/api/requests', async (req, res) => {
 
 app.get('/api/requests/track/:code', async (req, res) => {
   try {
-    const code = String(req.params.code || '').trim().toUpperCase();
-    const row = await get('SELECT * FROM requests WHERE tracking_code = ?', [code]);
+    const rawInput = String(req.params.code || '').trim();
+    const code = rawInput.toUpperCase();
+    const phoneDigits = normalizePhone(rawInput);
+    const phoneCandidates = Array.from(new Set([
+      phoneDigits,
+      phoneDigits ? `0${phoneDigits}` : '',
+      phoneDigits ? `994${phoneDigits}` : ''
+    ].filter(Boolean)));
+
+    let row = null;
+    if (code) {
+      row = await get('SELECT * FROM requests WHERE tracking_code = ? LIMIT 1', [code]);
+    }
+    if (!row && phoneCandidates.length) {
+      const phoneQuery = `SELECT * FROM requests WHERE customer_phone IN (${phoneCandidates.map(() => '?').join(', ')}) ORDER BY created_at DESC LIMIT 1`;
+      row = await get(phoneQuery, phoneCandidates);
+    }
 
     if (!row) {
-      return res.status(404).json({ error: 'Bu izləmə kodu ilə müraciət tapılmadı.' });
+      return res.status(404).json({ error: 'Bu izləmə kodu və ya telefon nömrəsi ilə müraciət tapılmadı.' });
     }
 
     return res.json({
@@ -1019,14 +1123,23 @@ app.post('/api/chat/send', async (req, res) => {
     const sessionId = String(req.body.session_id || '').trim() || `guest-${Date.now()}`;
     const senderType = String(req.body.sender_type || '').trim();
     const message = String(req.body.message || '').trim();
+    const customerName = String(req.body.customer_name || '').trim();
+    const customerPhone = normalizePhone(req.body.customer_phone || '');
 
     if (!['customer', 'admin', 'bot'].includes(senderType) || !message) {
       return res.status(400).json({ error: 'Göndərən və mesaj mütləqdir.' });
     }
 
+    const existingSessionMeta = await get(
+      'SELECT customer_name, customer_phone FROM chat_messages WHERE session_id = ? AND (customer_name IS NOT NULL OR customer_phone IS NOT NULL) ORDER BY id DESC LIMIT 1',
+      [sessionId]
+    );
+    const resolvedCustomerName = customerName || existingSessionMeta?.customer_name || 'Müştəri';
+    const resolvedCustomerPhone = customerPhone || existingSessionMeta?.customer_phone || '';
+
     const saved = await run(
-      'INSERT INTO chat_messages (session_id, sender_type, message, created_at) VALUES (?, ?, ?, ?)',
-      [sessionId, senderType, message, nowIso()]
+      'INSERT INTO chat_messages (session_id, sender_type, message, customer_name, customer_phone, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [sessionId, senderType, message, senderType === 'customer' ? resolvedCustomerName : (existingSessionMeta?.customer_name || null), senderType === 'customer' ? resolvedCustomerPhone : (existingSessionMeta?.customer_phone || null), nowIso()]
     );
 
     const row = await get('SELECT * FROM chat_messages WHERE id = ?', [saved.lastInsertRowid]);
@@ -1035,15 +1148,20 @@ app.post('/api/chat/send', async (req, res) => {
       const sessionHistory = await all('SELECT * FROM chat_messages WHERE session_id = ? ORDER BY created_at ASC', [sessionId]);
       const botReply = getKnowledgeBaseReply(message, sessionHistory);
       const botSaved = await run(
-        'INSERT INTO chat_messages (session_id, sender_type, message, created_at) VALUES (?, ?, ?, ?)',
-        [sessionId, 'bot', botReply, nowIso()]
+        'INSERT INTO chat_messages (session_id, sender_type, message, customer_name, customer_phone, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+        [sessionId, 'bot', botReply, resolvedCustomerName, resolvedCustomerPhone, nowIso()]
       );
       const botRow = await get('SELECT * FROM chat_messages WHERE id = ?', [botSaved.lastInsertRowid]);
 
       emitAdminNotification({
         title: 'Yeni canlı chat',
         message: `Yeni mesaj: ${message}`,
-        meta: { session_id: sessionId, sender_type: 'customer' }
+        meta: {
+          session_id: sessionId,
+          sender_type: 'customer',
+          customer_name: resolvedCustomerName,
+          customer_phone: resolvedCustomerPhone
+        }
       });
 
       void sendAdminEmail({
@@ -1051,6 +1169,8 @@ app.post('/api/chat/send', async (req, res) => {
         summary: 'Canlı çatda yeni müştəri mesajı daxil olub.',
         details: {
           'Session ID': sessionId,
+          'Müştəri': resolvedCustomerName,
+          'Telefon': formatPhoneDisplay(resolvedCustomerPhone) || resolvedCustomerPhone || '-',
           'Müştəri mesajı': message,
           'Bot cavabı': botReply
         }
@@ -1092,13 +1212,16 @@ app.get('/api/admin/chats', requireAdmin, async (req, res) => {
     for (const row of rows) {
       const existing = sessions.get(row.session_id) || {
         session_id: row.session_id,
-        customer_name: row.session_id,
+        customer_name: row.customer_name || 'Müştəri',
+        customer_phone: row.customer_phone || '',
         last_message: '',
         last_message_at: row.created_at,
         unread_count: 0,
         messages: []
       };
 
+      if (row.customer_name) existing.customer_name = row.customer_name;
+      if (row.customer_phone) existing.customer_phone = row.customer_phone;
       existing.last_message = row.message;
       existing.last_message_at = row.created_at;
       existing.messages.push(row);
@@ -1113,7 +1236,8 @@ app.get('/api/admin/chats', requireAdmin, async (req, res) => {
         ...chat,
         unread_count: Number(chat.unread_count || 0),
         last_message_at: chat.last_message_at || new Date().toISOString(),
-        customer_name: chat.customer_name || chat.session_id
+        customer_name: chat.customer_name || chat.session_id,
+        customer_phone: chat.customer_phone || ''
       }))
       .sort((a, b) => new Date(b.last_message_at) - new Date(a.last_message_at));
 

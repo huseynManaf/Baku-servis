@@ -24,7 +24,17 @@
       .loading-block { color: var(--text-low); font-size: 14px; }
       #onsite-map-wrap { display: none; margin-top: 14px; }
       #onsite-map-wrap.visible { display: block; }
-      #onsite-map { height: 260px; width: 100%; border: 1px solid var(--line); border-radius: 10px; }
+      #onsite-map {
+        min-height: 280px;
+        width: 100%;
+        z-index: 1;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+      }
+      .leaflet-container {
+        background: #e5e3df !important;
+        height: 100% !important;
+      }
       .map-search-row { display: flex; gap: 8px; }
       .map-search-row input { flex: 1; }
       .checkbox-row { display: flex; align-items: center; gap: 10px; font-weight: 500; color: var(--text-mid); }
@@ -126,38 +136,7 @@
               <span>İzləmə lövhəsi</span>
               <div class="live"><i></i> Canlı</div>
             </div>
-
-            <div class="ticket">
-              <div>
-                <div class="tname">Laptop format</div>
-                <div class="tdev">Lenovo ThinkPad</div>
-              </div>
-              <span class="status-chip status-icrada">İcrada</span>
-            </div>
-
-            <div class="ticket">
-              <div>
-                <div class="tname">Virus təmizliyi</div>
-                <div class="tdev">HP Pavilion</div>
-              </div>
-              <span class="status-chip status-hazir">Hazırdır</span>
-            </div>
-
-            <div class="ticket">
-              <div>
-                <div class="tname">SSD quraşdırma</div>
-                <div class="tdev">Dell Latitude</div>
-              </div>
-              <span class="status-chip status-qiymetlendirildi">Qiymətləndirildi</span>
-            </div>
-
-            <div class="ticket">
-              <div>
-                <div class="tname">BIOS reset</div>
-                <div class="tdev">Acer Aspire</div>
-              </div>
-              <span class="status-chip status-yeni">Gözləmədə</span>
-            </div>
+            <div id="live-board" class="live-board-list"></div>
           </div>
         </div>
       </section>
@@ -378,8 +357,8 @@
 
               <form id="track-form" novalidate class="tracking-form">
                 <div class="field">
-                  <label for="tracking_code">İzləmə kodu</label>
-                  <input id="tracking_code" type="text" placeholder="HG-ABCD12" required autocomplete="off" aria-label="İzləmə kodu" />
+                  <label for="tracking_code">İzləmə kodu və ya telefon nömrəsi</label>
+                  <input id="tracking_code" type="text" placeholder="HG-ABCD12 və ya 050 123 45 67" required autocomplete="off" aria-label="İzləmə kodu və ya telefon nömrəsi" />
                 </div>
                 <button type="submit" class="btn btn-primary btn-block">Axtar</button>
               </form>

@@ -138,6 +138,17 @@ body[data-theme="light"] .nav, body.theme-light .nav{background:rgba(255,255,255
 .brand .dot{width:9px;height:9px;border-radius:2px;background:var(--amber);transform:rotate(45deg);display:none;}
 .brand-text{letter-spacing:0.11em; font-size: 0.94rem; background:linear-gradient(135deg,#e0f2fe 0%,#7dd3fc 30%,#93c5fd 60%,#a5b4fc 100%); -webkit-background-clip:text; background-clip:text; color:transparent; text-shadow:0 0 18px rgba(125,211,252,0.15);}
 .login-card .brand-mark{width:46px;height:46px;}
+#onsite-map {
+  min-height: 280px;
+  width: 100%;
+  z-index: 1;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.leaflet-container {
+  background: #e5e3df !important;
+  height: 100% !important;
+}
 .nav-links{display:flex;gap:28px;align-items:center;}
 .nav-links a{text-decoration:none;color:var(--text-mid);font-size:14.5px;font-weight:500;}
 .nav-links a:hover{color:var(--text-hi);}

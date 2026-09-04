@@ -424,13 +424,17 @@ document.addEventListener('DOMContentLoaded', () => {
       const chats = Array.isArray(data.chats) ? data.chats : [];
 
       if (!adminChatList) return;
-      adminChatList.innerHTML = chats.length ? chats.map((chat) => `
-        <div class="admin-chat-item ${currentChatSession === chat.session_id ? 'active' : ''}" data-session-id="${chat.session_id}">
-          <strong>${chat.customer_name}</strong>
-          <div>${chat.last_message || 'Mesaj yoxdur'}</div>
-          <small>${chat.unread_count ? `${chat.unread_count} oxunmamış` : 'Oxunmuş'} · ${formatDateTime(chat.last_message_at)}</small>
-        </div>
-      `).join('') : '<div class="small">Aktiv chat yoxdur.</div>';
+      adminChatList.innerHTML = chats.length ? chats.map((chat) => {
+        const customerName = chat.customer_name || 'Müştəri';
+        const customerPhone = chat.customer_phone ? ` • ${chat.customer_phone}` : '';
+        return `
+          <div class="admin-chat-item ${currentChatSession === chat.session_id ? 'active' : ''}" data-session-id="${chat.session_id}">
+            <strong>${customerName}${customerPhone}</strong>
+            <div>${chat.last_message || 'Mesaj yoxdur'}</div>
+            <small>${chat.unread_count ? `${chat.unread_count} oxunmamış` : 'Oxunmuş'} · ${formatDateTime(chat.last_message_at)}</small>
+          </div>
+        `;
+      }).join('') : '<div class="small">Aktiv chat yoxdur.</div>';
 
       adminChatList.querySelectorAll('.admin-chat-item').forEach((item) => {
         item.addEventListener('click', async () => {
