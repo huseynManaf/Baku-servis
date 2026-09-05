@@ -36,7 +36,7 @@
   const requestSubmitButton = requestForm?.querySelector('button[type="submit"]');
   let activeTrackingId = null;
   let requestSubmitting = false;
-  const AZERBAIJANI_PHONE_REGEX = /^(?:\+?994|0)?\s?(?:50|51|55|70|77|99|10|60)\s?\d{3}\s?\d{2}\s?\d{2}$/;
+  const AZERBAIJANI_PHONE_REGEX = /^(\+994|994|0)?(50|51|55|60|70|77|99)\d{7}$/;
 
   const onsiteToggle = document.getElementById('is_onsite');
   const onsiteMapWrap = document.getElementById('onsite-map-wrap');
@@ -76,7 +76,8 @@
   function sanitizePhone(value) {
     const raw = String(value || '').trim();
     const hasLeadingPlus = raw.startsWith('+');
-    const digits = raw.replace(/\D/g, '');
+    const withoutFormatting = raw.replace(/[\s\-\(\)]/g, '');
+    const digits = withoutFormatting.replace(/[^\d]/g, '');
     return hasLeadingPlus ? `+${digits}` : digits;
   }
 

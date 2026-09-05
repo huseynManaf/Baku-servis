@@ -53,7 +53,7 @@ const SMTP_USER = process.env.SMTP_USER || process.env.EMAIL_USER || 'huseynmana
 const SMTP_PASS = process.env.SMTP_PASS || process.env.EMAIL_PASS || '';
 const MAIL_FROM = process.env.MAIL_FROM || 'Baku Servis <noreply@bakuservis.az>';
 const ADMIN_EMAIL = 'huseynmanafli844@gmail.com';
-const AZERBAIJANI_PHONE_REGEX = /^(?:\+?994|0)?\s?(?:50|51|55|70|77|99|10|60)\s?\d{3}\s?\d{2}\s?\d{2}$/;
+const AZERBAIJANI_PHONE_REGEX = /^(\+994|994|0)?(50|51|55|60|70|77|99)\d{7}$/;
 const SUPER_ADMIN_EMAIL_ALIASES = Array.from(new Set([
   ADMIN_USERNAME,
   'huseynmanfli844@gmail.com',
@@ -82,7 +82,8 @@ function formatDate(value) {
 function sanitizePhoneInput(value) {
   const raw = String(value || '').trim();
   const hasLeadingPlus = raw.startsWith('+');
-  const digits = raw.replace(/\D/g, '');
+  const withoutFormatting = raw.replace(/[\s\-\(\)]/g, '');
+  const digits = withoutFormatting.replace(/[^\d]/g, '');
   return hasLeadingPlus ? `+${digits}` : digits;
 }
 
