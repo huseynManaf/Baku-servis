@@ -47,8 +47,8 @@ const ADMIN_PASSWORD = process.env.DEFAULT_ADMIN_PASS || process.env.ADMIN_PASS 
 const SUPER_ADMIN_ROLE = 'SUPER_ADMIN';
 const ADMIN_ROLE = 'ADMIN';
 const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
-const SMTP_PORT = Number(process.env.SMTP_PORT || 465);
-const SMTP_SECURE = String(process.env.SMTP_SECURE || 'true').toLowerCase() === 'true';
+const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
+const SMTP_SECURE = String(process.env.SMTP_SECURE || 'false').toLowerCase() === 'true';
 const SMTP_USER = process.env.SMTP_USER || process.env.EMAIL_USER || 'huseynmanafli844@gmail.com';
 const SMTP_PASS = process.env.SMTP_PASS || process.env.EMAIL_PASS || '';
 const MAIL_FROM = process.env.MAIL_FROM || 'Baku Servis <noreply@bakuservis.az>';
@@ -240,7 +240,9 @@ async function sendGmailNotification({ to, from, subject, text, html }) {
 
   try {
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_SECURE,
       auth: {
         user: gmailUser,
         pass: gmailAppPassword
@@ -255,10 +257,22 @@ async function sendGmailNotification({ to, from, subject, text, html }) {
       html
     });
 
-    console.log('✅ Email sent successfully:', info.response);
+    console.log('✅ Email sent successfully:', {
+      messageId: info.messageId,
+      response: info.response,
+      accepted: info.accepted,
+      rejected: info.rejected
+    });
     return info;
   } catch (error) {
-    console.error('❌ Email notification failed:', error);
+    console.error('❌ Email notification failed:', {
+      message: error.message,
+      code: error.code,
+      responseCode: error.responseCode,
+      response: error.response,
+      command: error.command,
+      stack: error.stack
+    });
     return null;
   }
 }
@@ -294,6 +308,106 @@ function sendAdminEmail({ title, summary, details }) {
     text,
     html: buildNotificationHtml({ title, summary, details })
   });
+}
+
+function extractTrackingCode(value) {
+  const match = String(value || '').toUpperCase().match(/\bHG-[A-Z0-9]{6}\b/);
+  return match ? match[0] : '';
+}
+
+function extractSessionId(value) {
+  const match = String(value || '').match(/(?:session(?:\s*id)?|sessiya)\s*[:=]\s*([A-Za-z0-9_-]+)/i);
+  return match ? match[1] : '';
+}
+
+async function resolveTelegramChatSession(text, replyText = '') {
+  const combinedText = `${text}\n${replyText}`;
+  const explicitSessionId = extractSessionId(combinedText);
+  if (explicitSessionId) {
+    const sessionRow = await get('SELECT session_id FROM chat_messages WHERE session_id = ? LIMIT 1', [explicitSessionId]);
+    if (sessionRow) return explicitSessionId;
+  }
+
+  const commandSessionMatch = String(text || '').match(/^\/(?:reply|cavab)\s+([A-Za-z0-9_-]+)\s+/i);
+  if (commandSessionMatch) {
+    const sessionRow = await get('SELECT session_id FROM chat_messages WHERE session_id = ? LIMIT 1', [commandSessionMatch[1]]);
+    if (sessionRow) return commandSessionMatch[1];
+  }
+
+  const trackingCode = extractTrackingCode(combinedText);
+  if (trackingCode) {
+    const request = await get('SELECT customer_phone FROM requests WHERE UPPER(tracking_code) = ?', [trackingCode]);
+    if (request?.customer_phone) {
+      const chat = await get('SELECT session_id FROM chat_messages WHERE customer_phone = ? ORDER BY id DESC LIMIT 1', [normalizePhone(request.customer_phone)]);
+      if (chat?.session_id) return chat.session_id;
+    }
+  }
+
+  return '';
+}
+
+function extractTelegramReply(text) {
+  const value = String(text || '').trim();
+  const commandMatch = value.match(/^\/(?:reply|cavab)\s+(?:HG-[A-Z0-9]{6}|[A-Za-z0-9_-]+|(?:session(?:\s*id)?|sessiya)\s*[:=]\s*[A-Za-z0-9_-]+)\s+([\s\S]+)$/i);
+  if (commandMatch) return commandMatch[1].trim();
+  return value.replace(/^\/(?:reply|cavab)\s+/i, '').trim();
+}
+
+async function handleTelegramAdminMessage(message) {
+  const telegramChatId = String(process.env.TELEGRAM_CHAT_ID || '').trim();
+  const incomingChatId = String(message?.chat?.id || '').trim();
+  const configuredAdminChatId = String(process.env.TELEGRAM_ADMIN_CHAT_ID || telegramChatId).trim();
+  if (!incomingChatId || !configuredAdminChatId || incomingChatId !== configuredAdminChatId) {
+    return { ok: false, ignored: true, reason: 'unauthorized_chat' };
+  }
+
+  const text = String(message?.text || '').trim();
+  if (!text || text.startsWith('/start')) return { ok: true, ignored: true };
+
+  const replyText = message.reply_to_message?.text || '';
+  const sessionId = await resolveTelegramChatSession(text, replyText);
+  if (!sessionId) {
+    await sendTelegramNotification('⚠️ Cavabı çatla əlaqələndirmək alınmadı. Mesajı canlı chat bildirişinə Reply edərək yazın və ya belə göndərin: /reply HG-XXXXXX cavabınız');
+    return { ok: false, error: 'chat_not_found' };
+  }
+
+  const reply = extractTelegramReply(text);
+  if (!reply) return { ok: false, error: 'empty_reply' };
+
+  const metadata = await get('SELECT customer_name, customer_phone FROM chat_messages WHERE session_id = ? ORDER BY id DESC LIMIT 1', [sessionId]);
+  const saved = await run(
+    'INSERT INTO chat_messages (session_id, sender_type, message, customer_name, customer_phone, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    [sessionId, 'admin', reply, metadata?.customer_name || null, metadata?.customer_phone || null, nowIso()]
+  );
+  const row = await get('SELECT * FROM chat_messages WHERE id = ?', [saved.lastInsertRowid]);
+  io.emit('chat:message', { session_id: sessionId, sender_type: 'admin', message: reply });
+  await sendTelegramNotification(`✅ Cavab canlı çata göndərildi.\n\nSession ID: ${sessionId}`);
+  return { ok: true, message: row, session_id: sessionId };
+}
+
+async function configureTelegramWebhook() {
+  const telegramToken = String(process.env.TELEGRAM_BOT_TOKEN || '').trim();
+  const webhookUrl = String(process.env.TELEGRAM_WEBHOOK_URL || '').trim();
+  if (!telegramToken || !webhookUrl) return;
+
+  const body = { url: webhookUrl };
+  const secret = String(process.env.TELEGRAM_WEBHOOK_SECRET || '').trim();
+  if (secret) body.secret_token = secret;
+
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${telegramToken}/setWebhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result.ok === false) {
+      throw new Error(result.description || `Telegram HTTP ${response.status}`);
+    }
+    console.log('Telegram webhook configured:', webhookUrl);
+  } catch (error) {
+    console.error('Telegram webhook configuration failed:', error.message || error);
+  }
 }
 
 function emitAdminNotification(payload) {
@@ -671,6 +785,7 @@ async function startServer() {
     await ensureDatabase();
     server.listen(PORT, HOST, () => {
       console.log(`Baku Servis server started on http://${HOST}:${PORT}`);
+      void configureTelegramWebhook();
     });
   } catch (error) {
     console.error('Database initialization failed:', error);
@@ -743,6 +858,23 @@ app.get('/', (req, res) => {
 
 app.get('/health', (req, res) => {
   res.status(200).send('Baku Servis backend is running!');
+});
+
+app.post('/api/telegram/webhook', async (req, res) => {
+  const configuredSecret = String(process.env.TELEGRAM_WEBHOOK_SECRET || '').trim();
+  const receivedSecret = String(req.get('x-telegram-bot-api-secret-token') || '').trim();
+  if (configuredSecret && receivedSecret !== configuredSecret) {
+    return res.status(401).json({ error: 'Telegram webhook icazəsi rədd edildi.' });
+  }
+
+  try {
+    const message = req.body?.message || req.body?.edited_message;
+    if (message) await handleTelegramAdminMessage(message);
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error('POST /api/telegram/webhook error:', error);
+    return res.status(500).json({ error: 'Telegram mesajı emal edilə bilmədi.' });
+  }
 });
 
 app.get('/robots.txt', (req, res) => {
@@ -1380,7 +1512,7 @@ app.post('/api/chat/send', async (req, res) => {
       }).catch((emailError) => {
         console.error('Email notification failed (non-blocking):', emailError);
       });
-    void sendTelegramNotification(`🔔 Yeni canlı chat mesajı\n\n👤 Müştəri: ${resolvedCustomerName}\n📞 Telefon: ${resolvedCustomerPhone || '-'}\n💬 Mesaj: ${message}\n🤖 Bot cavabı: ${botReply}`);
+      void sendTelegramNotification(`🔔 Yeni canlı chat mesajı\n\n👤 Müştəri: ${resolvedCustomerName}\n📞 Telefon: ${resolvedCustomerPhone || '-'}\n🆔 Session ID: ${sessionId}\n💬 Mesaj: ${message}\n🤖 Bot cavabı: ${botReply}\n\nCavab üçün bu mesaja Reply edin və ya /reply ${sessionId} cavabınız yazın.`);
       return res.status(201).json({ ok: true, message: row, bot_message: botRow, reply: botReply });
     }
 
@@ -1456,5 +1588,44 @@ io.on('connection', (socket) => {
     socket.emit('admin:joined', { ok: true });
   });
 });
+async function sendAdminEmail(subject, htmlContent) {
+    const resendApiKey = process.env.RESEND_API_KEY;
+    const toEmail = process.env.NOTIFICATION_EMAIL || process.env.GMAIL_USER;
 
+    if (!resendApiKey) {
+        console.log('Resend API key is not configured in environment variables.');
+        return;
+    }
+
+    if (!toEmail) {
+        console.log('Target notification email is not configured.');
+        return;
+    }
+
+    try {
+        const response = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${resendApiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                from: 'Baku Servis <onboarding@resend.dev>',
+                to: [toEmail],
+                subject: subject,
+                html: htmlContent
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            console.error('Email notification failed via Resend API:', data);
+        } else {
+            console.log('Email notification sent successfully via Resend, ID:', data.id);
+        }
+    } catch (error) {
+        console.error('Email notification network error:', error.message);
+    }
+}
 startServer();
