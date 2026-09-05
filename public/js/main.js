@@ -33,7 +33,9 @@
   const payNowBtn = document.getElementById('pay-now-btn');
   const payLaterBtn = document.getElementById('pay-later-btn');
   const liveBoard = document.getElementById('live-board');
+  const requestSubmitButton = requestForm?.querySelector('button[type="submit"]');
   let activeTrackingId = null;
+  let requestSubmitting = false;
   const AZERBAIJANI_PHONE_REGEX = /^(?:\+?994|0)?\s?(?:50|51|55|70|77|99|10|60)\s?\d{3}\s?\d{2}\s?\d{2}$/;
 
   const onsiteToggle = document.getElementById('is_onsite');
@@ -615,44 +617,50 @@
 
   requestForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
-
-    const isOnsite = Boolean(onsiteToggle && onsiteToggle.checked);
-    const submittedPhone = sanitizePhone(document.getElementById('customer_phone').value);
-    const customerPhone = normalizePhone(submittedPhone);
-    const payload = {
-      customer_name: document.getElementById('customer_name').value.trim(),
-      customer_phone: customerPhone,
-      service_name: serviceSelect ? serviceSelect.value : '',
-      device_info: document.getElementById('device_info').value.trim(),
-      is_onsite: isOnsite,
-      payment_method: paymentMethodSelect ? paymentMethodSelect.value : 'later',
-      address: onsiteAddressInput ? onsiteAddressInput.value.trim() : '',
-      latitude: onsiteLatInput ? Number(onsiteLatInput.value || 0) : 0,
-      longitude: onsiteLngInput ? Number(onsiteLngInput.value || 0) : 0
-    };
-
-    if (!payload.customer_name || !payload.customer_phone || !payload.service_name) {
-      setMessage('Ad, telefon və xidmət sahələrini doldurun.', 'error');
-      return;
-    }
-
-    if (!isValidAzerbaijaniPhone(submittedPhone)) {
-      setMessage('Düzgün Azərbaycan mobil nömrəsi daxil edin. Məsələn: +994 50 123 45 67', 'error');
-      return;
-    }
-
-    if (isOnsite && (!payload.address || !Number.isFinite(payload.latitude) || !Number.isFinite(payload.longitude))) {
-      setMessage('Səyyar xidmət üçün ünvanı seçin və xəritədə nöqtə qoyun.', 'error');
-      return;
+    if (requestSubmitting) return;
+    requestSubmitting = true;
+    if (requestSubmitButton) {
+      requestSubmitButton.disabled = true;
+      requestSubmitButton.classList.add('loading');
     }
 
     try {
+      const isOnsite = Boolean(onsiteToggle && onsiteToggle.checked);
+      const submittedPhone = sanitizePhone(document.getElementById('customer_phone').value);
+      const customerPhone = normalizePhone(submittedPhone);
+      const payload = {
+        customer_name: document.getElementById('customer_name').value.trim(),
+        customer_phone: customerPhone,
+        service_name: serviceSelect ? serviceSelect.value : '',
+        device_info: document.getElementById('device_info').value.trim(),
+        is_onsite: isOnsite,
+        payment_method: paymentMethodSelect ? paymentMethodSelect.value : 'later',
+        address: onsiteAddressInput ? onsiteAddressInput.value.trim() : '',
+        latitude: onsiteLatInput ? Number(onsiteLatInput.value || 0) : 0,
+        longitude: onsiteLngInput ? Number(onsiteLngInput.value || 0) : 0,
+        idempotency_key: globalThis.crypto?.randomUUID?.() || `request-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      };
+
+      if (!payload.customer_name || !payload.customer_phone || !payload.service_name) {
+        setMessage('Ad, telefon və xidmət sahələrini doldurun.', 'error');
+        return;
+      }
+
+      if (!isValidAzerbaijaniPhone(submittedPhone)) {
+        setMessage('Düzgün Azərbaycan mobil nömrəsi daxil edin. Məsələn: +994 50 123 45 67', 'error');
+        return;
+      }
+
+      if (isOnsite && (!payload.address || !Number.isFinite(payload.latitude) || !Number.isFinite(payload.longitude))) {
+        setMessage('Səyyar xidmət üçün ünvanı seçin və xəritədə nöqtə qoyun.', 'error');
+        return;
+      }
+
       const response = await fetch('/api/requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-
       const body = await response.json().catch(() => ({}));
       const isSuccess = response.ok && (body.success !== false) && (!!body.tracking_code || !!body.request_id || !!body.ok);
 
@@ -662,7 +670,6 @@
       }
 
       const customerName = document.getElementById('customer_name').value.trim();
-      const customerPhone = sanitizePhone(document.getElementById('customer_phone').value);
       setStoredCustomerIdentity(customerName, customerPhone);
 
       requestForm.reset();
@@ -686,6 +693,12 @@
     } catch (error) {
       console.error('requestForm error:', error);
       setMessage('Serverə qoşularkən xəta baş verdi.', 'error');
+    } finally {
+      requestSubmitting = false;
+      if (requestSubmitButton) {
+        requestSubmitButton.disabled = false;
+        requestSubmitButton.classList.remove('loading');
+      }
     }
   });
 

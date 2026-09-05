@@ -9,6 +9,7 @@ const session = require('express-session');
 const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
 const sqlite3 = require('sqlite3').verbose();
+const { Pool } = require('pg');
 const { Server } = require('socket.io');
 
 const app = express();
@@ -21,12 +22,25 @@ const io = new Server(server, {
     credentials: true
   }
 });
-const DATA_DIR = path.join(__dirname, 'data');
-const DB_PATH = path.join(DATA_DIR, 'bakuservis.db');
+const DATA_DIR = path.resolve(process.env.DATA_DIR || process.env.PERSISTENT_DATA_DIR || path.join(__dirname, 'data'));
+const DB_PATH = path.join(DATA_DIR, process.env.DATABASE_FILE || 'bakuservis.db');
+const DATABASE_URL = String(process.env.DATABASE_URL || '').trim();
+const usePostgres = Boolean(DATABASE_URL);
 
-fs.mkdirSync(DATA_DIR, { recursive: true });
-const db = new sqlite3.Database(DB_PATH);
-db.configure('busyTimeout', 5000);
+let db = null;
+let pool = null;
+if (usePostgres) {
+  pool = new Pool({
+    connectionString: DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+    max: Number(process.env.DATABASE_POOL_MAX || 10)
+  });
+  pool.on('error', (error) => console.error('PostgreSQL pool error:', error));
+} else {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  db = new sqlite3.Database(DB_PATH);
+  db.configure('busyTimeout', 5000);
+}
 
 const ADMIN_USERNAME = process.env.DEFAULT_ADMIN_USER || process.env.ADMIN_USER || 'huseynmanfli844@gmail.com';
 const ADMIN_PASSWORD = process.env.DEFAULT_ADMIN_PASS || process.env.ADMIN_PASS || 'Baku2019';
@@ -248,6 +262,27 @@ async function sendGmailNotification({ to, from, subject, text, html }) {
   }
 }
 
+async function sendTelegramNotification(text) {
+  const telegramToken = String(process.env.TELEGRAM_BOT_TOKEN || '').trim();
+  const telegramChatId = String(process.env.TELEGRAM_CHAT_ID || '').trim();
+  if (!telegramToken || !telegramChatId) return null;
+
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: telegramChatId, text })
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || body.ok === false) throw new Error(body.description || `Telegram HTTP ${response.status}`);
+    console.log('Telegram notification sent successfully.');
+    return body;
+  } catch (error) {
+    console.error('Telegram notification failed:', error.message || error);
+    return null;
+  }
+}
+
 function sendAdminEmail({ title, summary, details }) {
   const subject = title;
   const text = `${summary}\n\n${Object.entries(details || {}).map(([key, value]) => `${key}: ${value}`).join('\n')}`;
@@ -288,7 +323,23 @@ function requireSuperAdmin(req, res, next) {
   return res.status(403).json({ error: 'Bu əməliyyat üçün super admin icazəsi tələb olunur.' });
 }
 
+function convertPlaceholders(sql) {
+  let index = 0;
+  return sql.replace(/\?/g, () => `$${++index}`);
+}
+
 function run(sql, params = []) {
+  if (usePostgres) {
+    const normalizedSql = convertPlaceholders(sql);
+    const querySql = /^\s*INSERT\s/i.test(normalizedSql) && !/\bRETURNING\b/i.test(normalizedSql)
+      ? `${normalizedSql.trim().replace(/;$/, '')} RETURNING id`
+      : normalizedSql;
+    return pool.query(querySql, params).then((result) => ({
+      lastInsertRowid: result.rows[0]?.id || null,
+      changes: result.rowCount || 0
+    }));
+  }
+
   return new Promise((resolve, reject) => {
     db.run(sql, params, function onRun(err) {
       if (err) return reject(err);
@@ -298,6 +349,11 @@ function run(sql, params = []) {
 }
 
 function get(sql, params = []) {
+  if (usePostgres) {
+    const normalizedSql = convertPlaceholders(sql);
+    return pool.query(normalizedSql, params).then((result) => result.rows[0]);
+  }
+
   return new Promise((resolve, reject) => {
     db.get(sql, params, (err, row) => {
       if (err) return reject(err);
@@ -307,6 +363,11 @@ function get(sql, params = []) {
 }
 
 function all(sql, params = []) {
+  if (usePostgres) {
+    const normalizedSql = convertPlaceholders(sql);
+    return pool.query(normalizedSql, params).then((result) => result.rows || []);
+  }
+
   return new Promise((resolve, reject) => {
     db.all(sql, params, (err, rows) => {
       if (err) return reject(err);
@@ -344,18 +405,45 @@ async function ensureOrdersTable() {
   for (const column of orderColumnsToAdd) {
     if (!orderColumns.has(column)) {
       const typeMap = {
-        device_model: 'TEXT',
-        quoted_price: 'REAL DEFAULT 0',
-        final_price: 'REAL DEFAULT 0',
-        is_onsite: 'INTEGER NOT NULL DEFAULT 0',
-        address: 'TEXT',
-        latitude: 'REAL',
-        longitude: 'REAL',
-        payment_method: "TEXT NOT NULL DEFAULT 'later'",
-        payment_status: "TEXT NOT NULL DEFAULT 'Ödənilməyib'"
+        device_model: 'TEXT', quoted_price: 'REAL DEFAULT 0', final_price: 'REAL DEFAULT 0',
+        is_onsite: 'INTEGER NOT NULL DEFAULT 0', address: 'TEXT', latitude: 'REAL', longitude: 'REAL',
+        payment_method: "TEXT NOT NULL DEFAULT 'later'", payment_status: "TEXT NOT NULL DEFAULT 'Ödənilməyib'"
       };
       await run(`ALTER TABLE orders ADD COLUMN ${column} ${typeMap[column]}`);
     }
+  }
+}
+
+async function ensurePostgresDatabase() {
+  await run(`CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, email TEXT UNIQUE NOT NULL, username TEXT, password_hash TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'ADMIN', created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
+  await run('ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT');
+  await run("ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'ADMIN'");
+  await run(`CREATE TABLE IF NOT EXISTS admins (id SERIAL PRIMARY KEY, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'ADMIN', created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
+  await run("ALTER TABLE admins ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'ADMIN'");
+  await run(`CREATE TABLE IF NOT EXISTS services (id SERIAL PRIMARY KEY, name TEXT NOT NULL UNIQUE, category TEXT NOT NULL DEFAULT 'Genel', price NUMERIC(12, 2) DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
+  await run('ALTER TABLE services ADD COLUMN IF NOT EXISTS price NUMERIC(12, 2) DEFAULT 0');
+
+  const requestSchema = `id SERIAL PRIMARY KEY, tracking_code TEXT UNIQUE NOT NULL, customer_name TEXT NOT NULL, customer_phone TEXT NOT NULL, service_name TEXT NOT NULL, device_model TEXT, device_info TEXT, status TEXT NOT NULL DEFAULT 'Gözləmədə', quoted_price NUMERIC(12, 2) DEFAULT 0, final_price NUMERIC(12, 2) DEFAULT 0, is_onsite INTEGER NOT NULL DEFAULT 0, address TEXT, latitude DOUBLE PRECISION, longitude DOUBLE PRECISION, payment_method TEXT NOT NULL DEFAULT 'later', payment_status TEXT NOT NULL DEFAULT 'Ödənilməyib', idempotency_key TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP`;
+  await run(`CREATE TABLE IF NOT EXISTS requests (${requestSchema})`);
+  await run(`CREATE TABLE IF NOT EXISTS orders (${requestSchema})`);
+  await run(`CREATE TABLE IF NOT EXISTS chat_messages (id SERIAL PRIMARY KEY, session_id TEXT NOT NULL, sender_type TEXT NOT NULL CHECK(sender_type IN ('customer', 'admin', 'bot')), message TEXT NOT NULL, customer_name TEXT, customer_phone TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
+  await run('ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS customer_name TEXT');
+  await run('ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS customer_phone TEXT');
+  await run('ALTER TABLE requests ADD COLUMN IF NOT EXISTS idempotency_key TEXT');
+  await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_requests_idempotency_key ON requests (idempotency_key) WHERE idempotency_key IS NOT NULL');
+  await run('CREATE INDEX IF NOT EXISTS idx_requests_tracking_code ON requests (tracking_code)');
+  await run('CREATE INDEX IF NOT EXISTS idx_requests_customer_phone ON requests (customer_phone)');
+  await run('CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders (created_at DESC)');
+  await run('CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages (session_id, created_at)');
+
+  const passwordHash = bcrypt.hashSync(ADMIN_PASSWORD, 10);
+  const user = await get('SELECT * FROM users WHERE LOWER(email) = LOWER(?) OR LOWER(username) = LOWER(?) LIMIT 1', [ADMIN_USERNAME, ADMIN_USERNAME]);
+  if (!user) await run('INSERT INTO users (email, username, password_hash, role) VALUES (?, ?, ?, ?)', [ADMIN_USERNAME, ADMIN_USERNAME, passwordHash, SUPER_ADMIN_ROLE]);
+  const admin = await get('SELECT * FROM admins WHERE LOWER(username) = LOWER(?) LIMIT 1', [ADMIN_USERNAME]);
+  if (!admin) await run('INSERT INTO admins (username, password_hash, role) VALUES (?, ?, ?)', [ADMIN_USERNAME, passwordHash, SUPER_ADMIN_ROLE]);
+
+  for (const [name, category] of [['Phone Diagnostic & Repair', 'Personal Tech'], ['Laptop Maintenance & Repair', 'Personal Tech'], ['Corporate IT Support', 'Corporate IT Support'], ['Server & Network Management', 'Server/Network Management']]) {
+    if (!await get('SELECT id FROM services WHERE LOWER(name) = LOWER(?) LIMIT 1', [name])) await run('INSERT INTO services (name, category) VALUES (?, ?)', [name, category]);
   }
 }
 
@@ -392,6 +480,11 @@ async function ensureChatMessagesTable() {
 }
 
 async function ensureDatabase() {
+  if (usePostgres) {
+    await ensurePostgresDatabase();
+    return;
+  }
+
   await ensureOrdersTable();
 
   await run(`
@@ -458,10 +551,14 @@ async function ensureDatabase() {
       longitude REAL,
       payment_method TEXT NOT NULL DEFAULT 'later',
       payment_status TEXT NOT NULL DEFAULT 'Ödənilməyib',
+      idempotency_key TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
+
+  await safeAddColumn('requests', 'idempotency_key', 'TEXT');
+  await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_requests_idempotency_key ON requests (idempotency_key) WHERE idempotency_key IS NOT NULL');
 
   const chatTableDefinition = await get("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'chat_messages'");
   if (!chatTableDefinition || !chatTableDefinition.sql || !chatTableDefinition.sql.includes("'bot'")) {
@@ -514,7 +611,7 @@ async function ensureDatabase() {
   }
 
   const requestColumns = new Set((await all('PRAGMA table_info(requests)')).map((col) => col.name));
-  const requestColumnsToAdd = ['device_model', 'is_onsite', 'address', 'latitude', 'longitude', 'payment_method', 'payment_status'];
+  const requestColumnsToAdd = ['device_model', 'is_onsite', 'address', 'latitude', 'longitude', 'payment_method', 'payment_status', 'idempotency_key'];
   for (const column of requestColumnsToAdd) {
     if (!requestColumns.has(column)) {
       const typeMap = {
@@ -579,6 +676,29 @@ async function startServer() {
     process.exit(1);
   }
 }
+
+function shutdown(signal) {
+  console.log(`${signal} received; closing server and database safely.`);
+  server.close(() => {
+    const closeDatabase = (error) => {
+      if (error) {
+        console.error('Database close failed:', error);
+        process.exitCode = 1;
+      }
+      process.exit();
+    };
+
+    if (usePostgres) {
+      pool.end().then(() => closeDatabase()).catch(closeDatabase);
+      return;
+    }
+
+    db.close(closeDatabase);
+  });
+}
+
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '2mb' }));
@@ -802,6 +922,7 @@ app.post('/api/requests', async (req, res) => {
     const submittedPhone = sanitizePhoneInput(req.body.customer_phone || '');
     const customer_phone = normalizePhone(submittedPhone);
     const service_name = String(req.body.service_name || '').trim();
+    const idempotency_key = String(req.body.idempotency_key || '').trim().slice(0, 120);
     const device_info = String(req.body.device_info || '').trim();
     const device_model = String(req.body.device_model || device_info || '').trim();
     const onsite_address = String(req.body.address || '').trim();
@@ -812,6 +933,23 @@ app.post('/api/requests', async (req, res) => {
 
     if (!isValidAzerbaijaniPhone(submittedPhone)) {
       return res.status(400).json({ error: 'Düzgün Azərbaycan mobil nömrəsi daxil edin.' });
+    }
+
+    if (idempotency_key) {
+      const existingRequest = await get('SELECT * FROM requests WHERE idempotency_key = ? LIMIT 1', [idempotency_key]);
+      if (existingRequest) {
+        return res.status(200).json({
+          ok: true,
+          success: true,
+          duplicate: true,
+          request_id: existingRequest.id,
+          tracking_code: existingRequest.tracking_code,
+          payment_method: existingRequest.payment_method,
+          payment_status: existingRequest.payment_status,
+          created_at: formatDate(existingRequest.created_at),
+          status: existingRequest.status
+        });
+      }
     }
 
     const serviceExists = await get('SELECT id FROM services WHERE LOWER(name) = LOWER(?)', [service_name]);
@@ -852,19 +990,21 @@ app.post('/api/requests', async (req, res) => {
       Number.isFinite(longitude) ? longitude : null,
       normalizedPaymentMethod,
       paymentStatus,
+      idempotency_key || null,
       timestamp,
       timestamp
     ];
 
+    const orderInsert = [...requestInsert.slice(0, 15), ...requestInsert.slice(16)];
     const result = await run(`
-      INSERT INTO requests (tracking_code, customer_name, customer_phone, service_name, device_model, device_info, status, quoted_price, final_price, is_onsite, address, latitude, longitude, payment_method, payment_status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO requests (tracking_code, customer_name, customer_phone, service_name, device_model, device_info, status, quoted_price, final_price, is_onsite, address, latitude, longitude, payment_method, payment_status, idempotency_key, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, requestInsert);
 
     const orderResult = await run(`
       INSERT INTO orders (tracking_code, customer_name, customer_phone, service_name, device_model, device_info, status, quoted_price, final_price, is_onsite, address, latitude, longitude, payment_method, payment_status, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, requestInsert);
+    `, orderInsert);
 
     emitAdminNotification({
       title: 'Yeni müraciət',
@@ -895,31 +1035,7 @@ app.post('/api/requests', async (req, res) => {
       console.error('❌ Email error:', emailError);
     });
 
-    const gmailTo = process.env.NOTIFICATION_EMAIL || process.env.GMAIL_USER || ADMIN_EMAIL;
-    const gmailFrom = process.env.GMAIL_USER || process.env.EMAIL_USER || MAIL_FROM;
-    const requestEmailHtml = `
-      <h3>Yeni Müraciət Daxil Oldu!</h3>
-      <p><b>Müştəri:</b> ${customer_name}</p>
-      <p><b>Telefon:</b> ${customer_phone}</p>
-      <p><b>Xidmət:</b> ${service_name}</p>
-      <p><b>Cihaz:</b> ${device_info || 'Qeyd edilməyib'}</p>
-      <p><b>Ünvan / Yerləşmə:</b> ${onsite_address || address || 'Servisdə'}</p>
-      <p><b>İzləmə Kodu:</b> ${tracking_code}</p>
-    `;
-
-    try {
-      if (gmailTo && gmailFrom) {
-        await sendGmailNotification({
-          from: gmailFrom,
-          to: gmailTo,
-          subject: `🔔 Yeni Müraciət var: ${tracking_code}`,
-          text: `Yeni müraciət daxil oldu. Müşteri: ${customer_name}, Telefon: ${customer_phone}, Xidmət: ${service_name}.`,
-          html: requestEmailHtml
-        });
-      }
-    } catch (error) {
-      console.error('❌ Email notification failed (non-blocking):', error);
-    }
+    void sendTelegramNotification(`🔔 Yeni müraciət\n\n👤 ${customer_name}\n📞 ${customer_phone}\n🛠️ ${service_name}\n💻 ${device_info || '-'}\n🔑 ${tracking_code}`);
 
     return res.status(200).json({
       ok: true,
@@ -1263,7 +1379,7 @@ app.post('/api/chat/send', async (req, res) => {
       }).catch((emailError) => {
         console.error('Email notification failed (non-blocking):', emailError);
       });
-
+    void sendTelegramNotification(`🔔 Yeni canlı chat mesajı\n\n👤 Müştəri: ${resolvedCustomerName}\n📞 Telefon: ${resolvedCustomerPhone || '-'}\n💬 Mesaj: ${message}\n🤖 Bot cavabı: ${botReply}`);
       return res.status(201).json({ ok: true, message: row, bot_message: botRow, reply: botReply });
     }
 

@@ -4,7 +4,11 @@ data/*.db
 data/*.db-journal
 data/*.db-wal
 data/*.db-shm
-backups/*.db
 data/*.sqlite
-node_modules/
-.env
+data/*.sqlite-journal
+data/*.sqlite-wal
+data/*.sqlite-shm
+data/*.db-
+backups/*.db
+backups/*.sqlite
+backups/*.log

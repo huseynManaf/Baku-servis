@@ -60,17 +60,24 @@ ekranı da əlavə edə bilərəm ki, bunu panelin özündən edəsiniz.
 
 ## 3. Verilənlər bazası
 
-SQLite istifadə olunur (`better-sqlite3`), fayl: `data/bakuservis.db`. Ayrıca server qurmağa
-ehtiyac yoxdur — fayl sisteminin özü bazadır, kiçik/orta ölçülü bir servis saytı üçün
-tam kifayətdir.
+Server `DATABASE_URL` təyin olunanda PostgreSQL (Railway PostgreSQL və ya Supabase) istifadə
+edir. Bu rejimdə müraciətlər, chat mesajları, adminlər, xidmətlər və sifarişlər xarici SQL
+bazasına yazılır; kod deploy-u və `git push` həmin məlumatlara toxunmur. `DATABASE_URL` boş
+olanda lokal development üçün `data/bakuservis.db` SQLite fallback-i işləyir.
+
+Railway-də PostgreSQL servisi yaradın və onun `DATABASE_URL` dəyişənini tətbiqə əlavə edin.
+SQLite istifadə edilirsə, Railway Volume mount path-i `DATA_DIR` dəyişəninə verin. Runtime
+baza fayllarını Git-ə əlavə etməyin.
 
 **Bazanı "ayaqda saxlamaq" üçün görülən tədbirlər:**
 - `WAL` (Write-Ahead Log) rejimi aktivdir — eyni anda oxuma/yazma münaqişəsini azaldır və
   qəfil çökmə zamanı məlumat itkisi riskini minimuma endirir.
 - `foreign_keys` və `busy_timeout` aktivdir — "database is locked" xətalarının qarşısını alır.
 - Bütün cədvəllərdə indekslər var (status, telefon, müraciət ID-si üzrə axtarış sürətli olsun deyə).
-- `npm run backup` əmri ilə bazanın anlıq surəti `backups/` qovluğuna köçürülür, son 14 nüsxə
-  saxlanılır. Bunu serverinizdə **cron** və ya **pm2** ilə hər gecə avtomatlaşdıra bilərsiniz:
+- SQLite development bazası üçün `npm run backup` əmri ilə konsistent anlıq surət `backups/`
+  qovluğunda yaradılır, son 14 nüsxə saxlanılır. PostgreSQL rejimində əsas qoruma xarici
+  bazanın Railway/Supabase backup və point-in-time recovery imkanlarıdır. SQLite backup-ını
+  serverinizdə **cron** və ya **pm2** ilə hər gecə avtomatlaşdıra bilərsiniz:
   ```
   0 3 * * * cd /tam/yol/bakuservis && npm run backup >> backup.log 2>&1
   ```
