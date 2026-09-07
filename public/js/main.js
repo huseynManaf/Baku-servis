@@ -44,6 +44,7 @@
   const onsiteLatInput = document.getElementById('onsite-latitude');
   const onsiteLngInput = document.getElementById('onsite-longitude');
   const searchAddressBtn = document.getElementById('search-address-btn');
+  const addressSuggestions = document.getElementById('address-suggestions');
 
   let onSiteMap = null;
   let onSiteMarker = null;
@@ -403,6 +404,83 @@
       });
     }
 
+    let suggestionTimer = null;
+    let suggestionController = null;
+
+    function hideAddressSuggestions() {
+      if (!addressSuggestions) return;
+      addressSuggestions.hidden = true;
+      addressSuggestions.replaceChildren();
+    }
+
+    function showAddressSuggestions(places) {
+      if (!addressSuggestions) return;
+      addressSuggestions.replaceChildren();
+      if (!places.length) {
+        hideAddressSuggestions();
+        return;
+      }
+
+      places.forEach((place) => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'address-suggestion-item';
+        item.setAttribute('role', 'option');
+        item.textContent = place.display_name || 'Ünvan';
+        item.addEventListener('click', () => {
+          const lat = Number(place.lat);
+          const lng = Number(place.lon);
+          if (!Number.isFinite(lat) || !Number.isFinite(lng) || !isWithinAzerbaijan(lat, lng)) {
+            showToast('Azerbaycan hüdudları içində ünvan seçin.', 'error');
+            return;
+          }
+
+          onsiteAddressInput.value = place.display_name || '';
+          onsiteLatInput.value = String(lat);
+          onsiteLngInput.value = String(lng);
+          if (onSiteMarker) {
+            onSiteMarker.setLatLng([lat, lng]);
+          } else {
+            onSiteMarker = L.marker([lat, lng]).addTo(onSiteMap);
+          }
+          onSiteMap.setView([lat, lng], 14);
+          hideAddressSuggestions();
+        });
+        addressSuggestions.appendChild(item);
+      });
+      addressSuggestions.hidden = false;
+    }
+
+    onsiteAddressInput?.addEventListener('input', () => {
+      const query = onsiteAddressInput.value.trim();
+      window.clearTimeout(suggestionTimer);
+      if (suggestionController) suggestionController.abort();
+      if (query.length < 3) {
+        hideAddressSuggestions();
+        return;
+      }
+
+      suggestionTimer = window.setTimeout(async () => {
+        suggestionController = new AbortController();
+        try {
+          const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=az&limit=5`, {
+            headers: { Accept: 'application/json' },
+            signal: suggestionController.signal
+          });
+          if (!response.ok) throw new Error(`Address suggestions failed: ${response.status}`);
+          const places = await response.json();
+          if (onsiteAddressInput.value.trim() === query) showAddressSuggestions(Array.isArray(places) ? places : []);
+        } catch (error) {
+          if (error.name !== 'AbortError') console.error('address suggestions failed:', error);
+          hideAddressSuggestions();
+        }
+      }, 300);
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!addressSuggestions?.parentElement?.contains(event.target)) hideAddressSuggestions();
+    });
+
     onsiteToggle?.addEventListener('change', () => {
       if (onsiteToggle.checked) {
         onsiteMapWrap.classList.add('visible');
@@ -414,6 +492,7 @@
         }, 200);
       } else {
         onsiteMapWrap.classList.remove('visible');
+        hideAddressSuggestions();
       }
     });
 

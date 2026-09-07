@@ -375,7 +375,10 @@
                   <div class="field">
                     <label for="onsite-address">Ünvan</label>
                     <div class="map-search-row">
-                      <input id="onsite-address" type="text" placeholder="Ünvanı yazın və axtarın" autocomplete="street-address" aria-label="Ünvan" />
+                      <div class="address-input-wrap">
+                        <input id="onsite-address" type="text" placeholder="Ünvanı yazın və axtarın" autocomplete="street-address" aria-label="Ünvan" aria-controls="address-suggestions" aria-autocomplete="list" />
+                        <div id="address-suggestions" class="address-suggestions" role="listbox" hidden></div>
+                      </div>
                       <button type="button" id="search-address-btn" class="btn btn-outline btn-sm">Axtar</button>
                     </div>
                   </div>
