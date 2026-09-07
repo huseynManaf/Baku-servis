@@ -62,6 +62,22 @@ const SUPER_ADMIN_EMAIL_ALIASES = Array.from(new Set([
   ADMIN_USERNAME.replace('manafli', 'manfli')
 ].filter(Boolean)));
 
+const DEFAULT_SERVICES = [
+  ['Telefon Diaqnostikası və Təmiri', 'Fərdi Cihazlar'],
+  ['Kompüter və Noutbuk Xidmətləri', 'Fərdi Cihazlar'],
+  ['Proqram Təminatı və Sistem Dəstəyi', 'Proqram Təminatı'],
+  ['IP Kamera və Təhlükəsizlik Sistemləri', 'Təhlükəsizlik Sistemləri'],
+  ['Şəbəkə və Server İnfrastrukturu', 'Şəbəkə və Server'],
+  ['Səyyar və Kuryer Xidməti', 'Səyyar Xidmət']
+];
+
+const LEGACY_SERVICE_MIGRATIONS = [
+  ['Phone Diagnostic & Repair', 'Personal Tech', 'Telefon Diaqnostikası və Təmiri', 'Fərdi Cihazlar'],
+  ['Laptop Maintenance & Repair', 'Personal Tech', 'Kompüter və Noutbuk Xidmətləri', 'Fərdi Cihazlar'],
+  ['Corporate IT Support', 'Corporate IT Support', 'Proqram Təminatı və Sistem Dəstəyi', 'Proqram Təminatı'],
+  ['Server & Network Management', 'Server/Network Management', 'Şəbəkə və Server İnfrastrukturu', 'Şəbəkə və Server']
+];
+
 function normalizeRole(value) {
   const role = String(value || '').trim().toUpperCase();
   if (role === 'SUPER_ADMIN' || role === 'SUPERADMIN') return SUPER_ADMIN_ROLE;
@@ -529,6 +545,35 @@ async function ensureOrdersTable() {
   }
 }
 
+async function ensureDefaultServices() {
+  await run(`CREATE TABLE IF NOT EXISTS service_seed_state (id INTEGER PRIMARY KEY, initialized_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
+  const seedState = await get('SELECT id FROM service_seed_state WHERE id = 1 LIMIT 1');
+  if (seedState) return;
+
+  for (const [legacyName, legacyCategory, name, category] of LEGACY_SERVICE_MIGRATIONS) {
+    const translated = await get('SELECT id FROM services WHERE LOWER(name) = LOWER(?) LIMIT 1', [name]);
+    const legacy = await get(
+      'SELECT id FROM services WHERE LOWER(name) = LOWER(?) AND LOWER(category) = LOWER(?) LIMIT 1',
+      [legacyName, legacyCategory]
+    );
+
+    if (!translated && legacy) {
+      await run('UPDATE services SET name = ?, category = ? WHERE id = ?', [name, category, legacy.id]);
+    } else if (translated && legacy && translated.id !== legacy.id) {
+      await run('DELETE FROM services WHERE id = ?', [legacy.id]);
+    }
+  }
+
+  const serviceCount = await get('SELECT COUNT(*) AS count FROM services');
+  if (Number(serviceCount?.count || 0) === 0) {
+    for (const [name, category] of DEFAULT_SERVICES) {
+      await run('INSERT INTO services (name, category) VALUES (?, ?)', [name, category]);
+    }
+  }
+
+  await run('INSERT INTO service_seed_state (id) VALUES (?)', [1]);
+}
+
 async function ensurePostgresDatabase() {
   await run(`CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, email TEXT UNIQUE NOT NULL, username TEXT, password_hash TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'ADMIN', created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
   await run('ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT');
@@ -557,9 +602,7 @@ async function ensurePostgresDatabase() {
   const admin = await get('SELECT * FROM admins WHERE LOWER(username) = LOWER(?) LIMIT 1', [ADMIN_USERNAME]);
   if (!admin) await run('INSERT INTO admins (username, password_hash, role) VALUES (?, ?, ?)', [ADMIN_USERNAME, passwordHash, SUPER_ADMIN_ROLE]);
 
-  for (const [name, category] of [['Phone Diagnostic & Repair', 'Personal Tech'], ['Laptop Maintenance & Repair', 'Personal Tech'], ['Corporate IT Support', 'Corporate IT Support'], ['Server & Network Management', 'Server/Network Management']]) {
-    if (!await get('SELECT id FROM services WHERE LOWER(name) = LOWER(?) LIMIT 1', [name])) await run('INSERT INTO services (name, category) VALUES (?, ?)', [name, category]);
-  }
+  await ensureDefaultServices();
 }
 
 async function safeAddColumn(tableName, columnName, columnType = 'TEXT', defaultExpression = '') {
@@ -765,19 +808,7 @@ async function ensureDatabase() {
     await run('UPDATE admins SET password_hash = ?, role = ? WHERE id = ?', [superAdminPasswordHash, SUPER_ADMIN_ROLE, legacyAdmin.id]);
   }
 
-  const seedServices = [
-    ['Phone Diagnostic & Repair', 'Personal Tech'],
-    ['Laptop Maintenance & Repair', 'Personal Tech'],
-    ['Corporate IT Support', 'Corporate IT Support'],
-    ['Server & Network Management', 'Server/Network Management']
-  ];
-
-  for (const [name, category] of seedServices) {
-    const exists = await get('SELECT id FROM services WHERE LOWER(name) = LOWER(?)', [name]);
-    if (!exists) {
-      await run('INSERT INTO services (name, category) VALUES (?, ?)', [name, category]);
-    }
-  }
+  await ensureDefaultServices();
 }
 
 async function startServer() {
