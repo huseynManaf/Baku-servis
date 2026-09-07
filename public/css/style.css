@@ -151,6 +151,8 @@ body[data-theme="light"] .nav, body.theme-light .nav{background:rgba(255,255,255
 }
 .nav-links{display:flex;gap:28px;align-items:center;}
 .nav-links a{text-decoration:none;color:var(--text-mid);font-size:14.5px;font-weight:500;}
+.nav-links .nav-download{color:var(--text-hi);border:1px solid var(--line);border-radius:8px;padding:8px 12px;background:rgba(79,140,255,0.12);}
+.nav-links .nav-download:hover{border-color:var(--accent);color:var(--text-hi);}
 .nav-links a:hover{color:var(--text-hi);}
 .nav-cta{display:flex;gap:10px;align-items:center;}
 .tel-badge{
@@ -948,4 +950,46 @@ select.status-select{background:var(--ink-900);border:1px solid var(--line);colo
 .chat-input-row input{flex:1;background:var(--ink-900);border:1px solid var(--line);border-radius:8px;padding:10px 12px;color:var(--text-hi);}
 @media (max-width:900px){
   .chat-admin-layout{grid-template-columns:1fr;}
+}
+
+#chat-widget,
+#chat-panel,
+.chat-header,
+.chat-log,
+.chat-input-row,
+.chat-bubble,
+.chat-message{box-sizing:border-box;min-width:0;}
+#chat-panel{max-width:calc(100vw - 36px);}
+.chat-header strong{min-width:0;overflow-wrap:anywhere;}
+.chat-log{overscroll-behavior:contain;}
+.chat-log:empty{display:none;}
+.chat-bubble,
+.chat-message{overflow-wrap:anywhere;word-break:break-word;}
+.chat-input-row{align-items:center;}
+.chat-input-row input,
+#customer-chat-input{min-width:0;width:100%;}
+#customer-chat-send{flex:0 0 auto;white-space:nowrap;}
+
+@media (max-width:600px){
+  #chat-widget{left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom));}
+  #chat-panel{
+    left:12px;
+    right:12px;
+    bottom:calc(76px + env(safe-area-inset-bottom));
+    width:auto;
+    max-width:none;
+    height:auto;
+    max-height:calc(100dvh - 96px - env(safe-area-inset-bottom));
+    border-radius:14px;
+  }
+  #chat-panel .chat-header{padding:10px 12px;}
+  #chat-panel .chat-log{flex:0 1 auto;max-height:min(42dvh, 260px);padding:10px 8px;}
+  #chat-panel .chat-input-row{padding:8px;gap:6px;}
+  .chat-bubble{max-width:92%;}
+}
+
+@media (max-width:420px){
+  #chat-panel .chat-input-row{flex-direction:row;align-items:center;}
+  #chat-panel .chat-input-row input{min-height:42px;font-size:16px;}
+  #customer-chat-send{width:auto;min-width:68px;padding:10px 10px;}
 }

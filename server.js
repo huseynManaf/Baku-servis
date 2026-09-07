@@ -1,4 +1,5 @@
 ﻿require('dotenv').config();
+const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const http = require('http');
@@ -603,6 +604,24 @@ app.use((req, res, next) => {
 
 app.get('/', (req, res) => {
   res.status(200).sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/download', (req, res) => {
+  const apkCandidates = [
+    path.join(__dirname, 'download', 'app-debug.apk'),
+    path.join(__dirname, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk')
+  ];
+  const apkPath = apkCandidates.find((candidate) => fs.existsSync(candidate));
+
+  if (!apkPath) {
+    return res.status(404).send('APK hazır deyil. Zəhmət olmasa daha sonra yenidən cəhd edin.');
+  }
+
+  res.download(apkPath, 'Baku-Servis.apk', (error) => {
+    if (error && !res.headersSent) {
+      res.status(500).send('APK yüklənə bilmədi.');
+    }
+  });
 });
 
 app.get('/health', (req, res) => {
