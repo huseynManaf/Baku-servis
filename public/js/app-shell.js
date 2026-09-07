@@ -22,8 +22,12 @@
   function setScreen(screen) {
     if (!screen) return;
     body.classList.add('app-screen-mode');
-    body.classList.toggle('form-focus-mode', ['request', 'tracking', 'contact'].includes(screen));
+    body.classList.toggle('form-focus-mode', ['request', 'my-requests', 'contact'].includes(screen));
     screens.forEach((item) => item.dataset.screenActive = item.dataset.screen === screen ? 'true' : 'false');
+    const orderSection = document.getElementById('order-section');
+    const trackingCard = document.getElementById('track');
+    if (orderSection) orderSection.dataset.screenActive = screen === 'my-requests' || screen === 'request' ? 'true' : 'false';
+    if (trackingCard) trackingCard.dataset.screenActive = screen === 'my-requests' ? 'true' : 'false';
     links.forEach((link) => link.classList.toggle('is-active', link.dataset.screenLink === screen));
     localStorage.setItem('bakuservis-screen', screen);
     window.dispatchEvent(new CustomEvent('bakuservis:screen', { detail: screen }));
@@ -31,6 +35,8 @@
     const target = document.querySelector(`[data-screen="${screen}"]`);
     target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
+
+  window.BakuServisNavigation = { go: setScreen };
 
   drawerTrigger?.addEventListener('click', () => {
     drawer?.classList.add('is-open');

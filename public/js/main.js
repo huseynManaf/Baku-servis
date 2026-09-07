@@ -37,6 +37,9 @@
   const payLaterBtn = document.getElementById('pay-later-btn');
   const liveBoard = document.getElementById('live-board');
   const myRequestsList = document.getElementById('my-requests-list');
+  const unifiedTrackingForm = document.getElementById('unified-tracking-form');
+  const unifiedTrackingInput = document.getElementById('unified-tracking-input');
+  const unifiedTrackingMessage = document.getElementById('unified-tracking-message');
   const requestSubmitButton = requestForm?.querySelector('button[type="submit"]');
   let activeTrackingId = null;
   let requestSubmitting = false;
@@ -153,14 +156,22 @@
       return;
     }
     myRequestsList.innerHTML = requests.map((request) => `
-      <article class="my-request-card">
+      <article class="my-request-card" data-my-request-code="${request.tracking_code || ''}">
         <div class="my-request-main">
           <strong>${request.service_name || 'Xidmət'}${offline ? ' · offline' : ''}</strong>
           <small>${request.tracking_code || '-'} · ${request.device_info || 'Cihaz məlumatı yoxdur'} · ${formatDate(request.created_at)}</small>
         </div>
         <span class="status-chip my-request-status ${statusClass(request.status)}">${request.status || 'Gözləmədə'}</span>
+        <span class="my-request-arrow" aria-hidden="true">→</span>
       </article>
     `).join('');
+    myRequestsList.querySelectorAll('[data-my-request-code]').forEach((card) => card.addEventListener('click', () => {
+      const code = card.dataset.myRequestCode;
+      const trackingInput = document.getElementById('tracking_code');
+      if (trackingInput) trackingInput.value = code || '';
+      window.BakuServisNavigation?.go('my-requests');
+      if (code && trackForm) trackForm.dispatchEvent(new Event('submit'));
+    }));
   }
 
   async function loadMyRequests() {
@@ -182,6 +193,28 @@
       renderMyRequests(Array.isArray(cached) ? cached : [], true);
     }
   }
+
+  unifiedTrackingForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const value = String(unifiedTrackingInput?.value || '').trim();
+    if (!value) return;
+    const looksLikePhone = !/^HG-/i.test(value) && /\d/.test(value);
+    if (looksLikePhone && !/[a-z]/i.test(value)) {
+      const phone = sanitizePhone(value);
+      setStoredCustomerIdentity('', normalizePhone(phone));
+      if (trackingResult) trackingResult.style.display = 'none';
+      if (unifiedTrackingMessage) unifiedTrackingMessage.textContent = 'Müraciətləriniz yüklənir...';
+      await loadMyRequests();
+      if (unifiedTrackingMessage) unifiedTrackingMessage.textContent = 'Müraciətlər ən yenidən köhnəyə sıralanıb.';
+      return;
+    }
+
+    if (unifiedTrackingMessage) unifiedTrackingMessage.textContent = 'Sifariş detalları yüklənir...';
+    const trackingInput = document.getElementById('tracking_code');
+    if (trackingInput) trackingInput.value = value;
+    if (trackForm) trackForm.dispatchEvent(new Event('submit'));
+    if (unifiedTrackingMessage) unifiedTrackingMessage.textContent = 'Sifariş detalları aşağıda göstərilir.';
+  });
 
   function isWithinAzerbaijan(lat, lng) {
     return Number(lat) >= 38.3 && Number(lat) <= 41.9 && Number(lng) >= 44.7 && Number(lng) <= 50.9;
@@ -922,7 +955,11 @@
     if (event.detail === 'my-requests') loadMyRequests();
   });
 
-  if (myRequestsList) loadMyRequests();
+  if (myRequestsList) {
+    const savedIdentity = getStoredCustomerIdentity();
+    if (unifiedTrackingInput && savedIdentity.phone) unifiedTrackingInput.value = savedIdentity.phone;
+    loadMyRequests();
+  }
 
   window.addEventListener('bakuservis:status', (event) => {
     const request = event.detail;

@@ -133,7 +133,6 @@
         <div class="nav-links">
           <a href="#services">Xidmətlər</a>
           <a href="#order-section">Müraciət</a>
-          <a href="#track">İzləmə</a>
           <a href="#my-requests" data-screen-link="my-requests">Müraciətlərim</a>
           <a href="/download" class="nav-download app-download-only-web" aria-label="Android tətbiqini yüklə">Tətbiqi Yüklə</a>
         </div>
@@ -151,7 +150,6 @@
         <a href="#home" data-screen-link="home">Ana səhifə</a>
         <a href="#services" data-screen-link="services">Xidmətlər</a>
         <a href="#request-panel" data-screen-link="request">Müraciət</a>
-        <a href="#track" data-screen-link="tracking">Servis izləmə</a>
         <a href="#my-requests" data-screen-link="my-requests">Müraciətlərim</a>
         <a href="#contact" data-screen-link="contact">Əlaqə</a>
         <a href="/download" class="drawer-download app-download-only-web">Tətbiqi Yüklə</a>
@@ -515,12 +513,20 @@
     <section class="section app-screen my-requests-screen" id="my-requests" data-screen="my-requests">
       <div class="container">
         <div class="section-head">
-          <span class="eyebrow">Şəxsi kabinet</span>
-          <h2>Müraciətlərim</h2>
-          <p>Telefon nömrənizlə əlaqəli aktiv və keçmiş müraciətlərin statusunu burada izləyin.</p>
+          <span class="eyebrow">Vahid izləmə paneli</span>
+          <h2>İzləmə və Müraciətlərim</h2>
+          <p>İzləmə kodunuzu və ya telefon nömrənizi daxil edin. Telefon nömrəsi ilə bütün müraciətləriniz, kod ilə isə konkret sifarişin detalları göstərilir.</p>
         </div>
+        <form id="unified-tracking-form" class="unified-tracking-form" novalidate>
+          <label for="unified-tracking-input">İzləmə kodu və ya telefon nömrəsi</label>
+          <div class="unified-tracking-row">
+            <input id="unified-tracking-input" type="text" placeholder="HG-ABCD12 və ya 050 123 45 67" autocomplete="off" />
+            <button type="submit" class="btn btn-primary">Axtar</button>
+          </div>
+          <small id="unified-tracking-message" class="field-hint"></small>
+        </form>
         <div id="my-requests-list" class="my-requests-list">
-          <div class="my-requests-empty">Müraciət tarixçəniz yüklənir...</div>
+          <div class="my-requests-empty">Telefon nömrənizi daxil etdikdə müraciətləriniz burada görünəcək.</div>
         </div>
       </div>
     </section>
@@ -644,7 +650,6 @@
       <a href="#home" data-screen-link="home"><span>⌂</span><small>Ana səhifə</small></a>
       <a href="#services" data-screen-link="services"><span>▦</span><small>Xidmətlər</small></a>
       <a href="#request-panel" data-screen-link="request"><span>＋</span><small>Müraciət</small></a>
-      <a href="#track" data-screen-link="tracking"><span>⌁</span><small>İzləmə</small></a>
       <a href="#my-requests" data-screen-link="my-requests"><span>▤</span><small>Müraciətlərim</small></a>
       <a href="#contact" data-screen-link="contact"><span>◉</span><small>Əlaqə</small></a>
     </nav>
