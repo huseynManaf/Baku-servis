@@ -13,6 +13,7 @@ public class MainActivity extends BridgeActivity {
 
 		WebView webView = getBridge().getWebView();
 		WebSettings settings = webView.getSettings();
+		settings.setUserAgentString(settings.getUserAgentString() + " BakuServisApp");
 		settings.setJavaScriptEnabled(true);
 		settings.setDomStorageEnabled(true);
 		settings.setDatabaseEnabled(false);

@@ -156,8 +156,9 @@ body[data-theme="light"] .nav, body.theme-light .nav{background:rgba(255,255,255
 .nav-links a:hover{color:var(--text-hi);}
 .drawer-trigger{display:none;background:transparent;border:0;color:var(--text-hi);font-size:22px;padding:8px;cursor:pointer;}
 .navigation-drawer,.drawer-backdrop,.bottom-navigation{display:none;}
+.native-app .app-download-only-web{display:none !important;}
 .contact-screen{padding:84px 0 56px;}
-.contact-panel{max-width:920px;padding:34px;border:1px solid rgba(96,165,250,.2);border-radius:24px;background:linear-gradient(135deg,rgba(18,27,43,.96),rgba(13,20,30,.88));box-shadow:0 24px 54px rgba(2,6,23,.24);}
+.contact-panel{width:100%;max-width:920px;margin:0 auto;padding:34px;border:1px solid rgba(96,165,250,.2);border-radius:24px;background:linear-gradient(135deg,rgba(18,27,43,.96),rgba(13,20,30,.88));box-shadow:0 24px 54px rgba(2,6,23,.24);box-sizing:border-box;}
 .contact-intro{max-width:650px;}
 .contact-intro h2{font-size:clamp(30px,4vw,44px);line-height:1.08;margin:10px 0 14px;max-width:14ch;}
 .contact-intro p{max-width:58ch;font-size:16px;line-height:1.65;margin-bottom:28px;}
@@ -166,6 +167,7 @@ body[data-theme="light"] .nav, body.theme-light .nav{background:rgba(255,255,255
 .contact-option:hover{border-color:var(--teal-hi);background:rgba(82,208,200,.08);transform:translateY(-2px);}
 .contact-option-icon{display:flex;align-items:center;justify-content:center;width:40px;height:40px;flex:0 0 40px;border-radius:12px;background:linear-gradient(135deg,var(--amber),var(--teal));color:#fff;font-size:21px;}
 .contact-option-icon-green{background:linear-gradient(135deg,#25d366,#10b981);}
+.contact-option-icon svg{width:22px;height:22px;fill:currentColor;}
 .contact-option span:nth-child(2){display:flex;flex-direction:column;min-width:0;gap:3px;}
 .contact-option small{color:var(--text-low);font-size:11px;}
 .contact-option strong{font-size:14px;overflow-wrap:anywhere;}
@@ -463,10 +465,10 @@ body[data-theme="light"] .address-suggestion-item:focus-visible,body.theme-light
 .chat-toggle-btn{
   display:inline-flex;align-items:center;justify-content:center;width:54px;height:54px;min-width:54px;padding:0;border:none;border-radius:50%;
   background:linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
-  color:#fff;font-weight:700;font-size:13px;cursor:pointer;box-shadow:0 12px 26px rgba(59,130,246,0.38);z-index:999999;pointer-events:auto;position:relative;box-sizing:border-box;
+  color:#fff;font-weight:700;font-size:13px;cursor:pointer;box-shadow:0 12px 26px rgba(59,130,246,0.38);z-index:999999;pointer-events:auto;position:relative;box-sizing:border-box;overflow:hidden;
 }
 .chat-toggle-btn-icon{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,0.18);font-size:14px;}
-.chat-toggle-btn-text{white-space:nowrap;}
+.chat-toggle-btn-text{display:none !important;visibility:hidden !important;width:0 !important;overflow:hidden !important;}
 
 /* WhatsApp */
 .whatsapp-link{display:inline-flex;align-items:center;gap:7px;border-color:#2f6e5c;color:#6ee7c0;}
@@ -675,6 +677,7 @@ footer{border-top:1px solid var(--line);padding:44px 0;}
   .bottom-navigation a.is-active{color:var(--teal-hi);}
   .contact-screen{padding:38px 0 96px;}
   .contact-panel{padding:22px 16px;border-radius:18px;}
+  .contact-panel{width:100%;max-width:100%;}
   .contact-intro h2{font-size:30px;max-width:100%;}
   .contact-intro p{font-size:14px;margin-bottom:22px;}
   .contact-options{grid-template-columns:1fr;gap:10px;}

@@ -1,5 +1,7 @@
 (() => {
   const body = document.body;
+  const isNativeApp = Boolean(window.Capacitor?.isNativePlatform?.() || window.Capacitor?.getPlatform?.() === 'android' || /BakuServisApp|; wv\)|Capacitor/i.test(navigator.userAgent));
+  if (isNativeApp) body.classList.add('native-app');
   const drawer = document.getElementById('navigation-drawer');
   const backdrop = document.getElementById('drawer-backdrop');
   const drawerTrigger = document.getElementById('drawer-trigger');
@@ -17,7 +19,7 @@
   function setScreen(screen) {
     if (!screen) return;
     body.classList.add('app-screen-mode');
-    body.classList.toggle('form-focus-mode', screen === 'request' || screen === 'tracking');
+    body.classList.toggle('form-focus-mode', ['request', 'tracking', 'contact'].includes(screen));
     screens.forEach((item) => item.dataset.screenActive = item.dataset.screen === screen ? 'true' : 'false');
     links.forEach((link) => link.classList.toggle('is-active', link.dataset.screenLink === screen));
     localStorage.setItem('bakuservis-screen', screen);
@@ -40,6 +42,13 @@
       setScreen(link.dataset.screenLink);
     }
   }));
+
+  document.querySelectorAll('[data-open-chat]').forEach((link) => {
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      document.getElementById('chat-toggle-btn')?.click();
+    });
+  });
 
   const initialScreen = localStorage.getItem('bakuservis-screen') || 'home';
   if (window.matchMedia('(max-width: 920px)').matches) setScreen(initialScreen);
