@@ -646,6 +646,64 @@ footer{border-top:1px solid var(--line);padding:44px 0;}
 @media (max-width:900px){
   .admin-shell{display:block;}
   .admin-side{display:flex;flex-direction:row;gap:6px;overflow-x:auto;padding:10px;border-right:none;border-bottom:1px solid var(--line);}
+
+/* Mobile map search: keep the field touch-friendly and clear of the map. */
+@media (max-width:768px){
+  #onsite-map-wrap .map-search-row{
+    display:flex;
+    flex-direction:column;
+    align-items:stretch;
+    gap:10px;
+    width:100%;
+    margin-bottom:14px;
+  }
+  #onsite-map-wrap .map-search-row input#onsite-address{
+    display:block;
+    width:100% !important;
+    max-width:100%;
+    min-width:0;
+    min-height:48px;
+    height:48px;
+    padding:12px 15px;
+    border:1px solid rgba(148,163,184,.28);
+    border-radius:12px;
+    background:var(--ink-900);
+    color:var(--text-hi);
+    font-size:16px;
+    line-height:1.25;
+    box-shadow:0 6px 16px rgba(2,6,23,.12),inset 0 1px 0 rgba(255,255,255,.04);
+    -webkit-appearance:none;
+    appearance:none;
+  }
+  #onsite-map-wrap .map-search-row input#onsite-address::placeholder{color:var(--text-low);opacity:1;}
+  #onsite-map-wrap .map-search-row input#onsite-address:focus{border-color:var(--teal-hi);box-shadow:0 0 0 3px rgba(82,208,200,.14),0 8px 18px rgba(2,6,23,.14);outline:none;}
+  #onsite-map-wrap .map-search-row button#search-address-btn{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:100% !important;
+    min-height:48px;
+    height:48px;
+    padding:12px 16px;
+    border-radius:12px;
+  }
+  #onsite-map-wrap #onsite-map{
+    width:100%;
+    min-height:280px;
+    margin-top:0;
+    clear:both;
+    border-radius:12px;
+  }
+  body[data-theme="light"] #onsite-map-wrap .map-search-row input#onsite-address,
+  body.theme-light #onsite-map-wrap .map-search-row input#onsite-address{
+    background:#fff;
+    color:#0f172a;
+    border-color:#cbd5e1;
+    box-shadow:0 6px 16px rgba(15,23,42,.08);
+  }
+  body[data-theme="light"] #onsite-map-wrap .map-search-row input#onsite-address::placeholder,
+  body.theme-light #onsite-map-wrap .map-search-row input#onsite-address::placeholder{color:#64748b;}
+}
   .admin-side a{white-space:nowrap;padding:8px 10px;font-size:13px;}
   .admin-main{padding:18px;}
   .detail-grid{display:block}

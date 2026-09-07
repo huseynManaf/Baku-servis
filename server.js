@@ -1,5 +1,4 @@
 ﻿require('dotenv').config();
-const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const http = require('http');
@@ -8,7 +7,6 @@ const cors = require('cors');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
-const sqlite3 = require('sqlite3').verbose();
 const { Pool } = require('pg');
 const { Server } = require('socket.io');
 
@@ -22,25 +20,19 @@ const io = new Server(server, {
     credentials: true
   }
 });
-const DATA_DIR = path.resolve(process.env.DATA_DIR || process.env.PERSISTENT_DATA_DIR || path.join(__dirname, 'data'));
-const DB_PATH = path.join(DATA_DIR, process.env.DATABASE_FILE || 'bakuservis.db');
 const DATABASE_URL = String(process.env.DATABASE_URL || '').trim();
-const usePostgres = Boolean(DATABASE_URL);
-
-let db = null;
-let pool = null;
-if (usePostgres) {
-  pool = new Pool({
-    connectionString: DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
-    max: Number(process.env.DATABASE_POOL_MAX || 10)
-  });
-  pool.on('error', (error) => console.error('PostgreSQL pool error:', error));
-} else {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  db = new sqlite3.Database(DB_PATH);
-  db.configure('busyTimeout', 5000);
+if (!DATABASE_URL) {
+  throw new Error('DATABASE_URL must be configured for PostgreSQL.');
 }
+
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  ssl: String(process.env.DATABASE_SSL || 'true').toLowerCase() === 'true'
+    ? { rejectUnauthorized: false }
+    : undefined,
+  max: Number(process.env.DATABASE_POOL_MAX || 10)
+});
+pool.on('error', (error) => console.error('PostgreSQL pool error:', error));
 
 const ADMIN_USERNAME = process.env.DEFAULT_ADMIN_USER || process.env.ADMIN_USER || 'huseynmanfli844@gmail.com';
 const ADMIN_PASSWORD = process.env.DEFAULT_ADMIN_PASS || process.env.ADMIN_PASS || 'Baku2019';
@@ -460,89 +452,22 @@ function convertPlaceholders(sql) {
 }
 
 function run(sql, params = []) {
-  if (usePostgres) {
-    const normalizedSql = convertPlaceholders(sql);
-    const querySql = /^\s*INSERT\s/i.test(normalizedSql) && !/\bRETURNING\b/i.test(normalizedSql)
-      ? `${normalizedSql.trim().replace(/;$/, '')} RETURNING id`
-      : normalizedSql;
-    return pool.query(querySql, params).then((result) => ({
-      lastInsertRowid: result.rows[0]?.id || null,
-      changes: result.rowCount || 0
-    }));
-  }
-
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function onRun(err) {
-      if (err) return reject(err);
-      resolve({ lastInsertRowid: this.lastID, changes: this.changes });
-    });
-  });
+  const normalizedSql = convertPlaceholders(sql);
+  const querySql = /^\s*INSERT\s/i.test(normalizedSql) && !/\bRETURNING\b/i.test(normalizedSql)
+    ? `${normalizedSql.trim().replace(/;$/, '')} RETURNING id`
+    : normalizedSql;
+  return pool.query(querySql, params).then((result) => ({
+    lastInsertRowid: result.rows[0]?.id || null,
+    changes: result.rowCount || 0
+  }));
 }
 
 function get(sql, params = []) {
-  if (usePostgres) {
-    const normalizedSql = convertPlaceholders(sql);
-    return pool.query(normalizedSql, params).then((result) => result.rows[0]);
-  }
-
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) return reject(err);
-      resolve(row);
-    });
-  });
+  return pool.query(convertPlaceholders(sql), params).then((result) => result.rows[0]);
 }
 
 function all(sql, params = []) {
-  if (usePostgres) {
-    const normalizedSql = convertPlaceholders(sql);
-    return pool.query(normalizedSql, params).then((result) => result.rows || []);
-  }
-
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) return reject(err);
-      resolve(rows || []);
-    });
-  });
-}
-
-async function ensureOrdersTable() {
-  await run(`
-    CREATE TABLE IF NOT EXISTS orders (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      tracking_code TEXT UNIQUE NOT NULL,
-      customer_name TEXT NOT NULL,
-      customer_phone TEXT NOT NULL,
-      service_name TEXT NOT NULL,
-      device_model TEXT,
-      device_info TEXT,
-      status TEXT NOT NULL DEFAULT 'Gözləmədə',
-      quoted_price REAL DEFAULT 0,
-      final_price REAL DEFAULT 0,
-      is_onsite INTEGER NOT NULL DEFAULT 0,
-      address TEXT,
-      latitude REAL,
-      longitude REAL,
-      payment_method TEXT NOT NULL DEFAULT 'later',
-      payment_status TEXT NOT NULL DEFAULT 'Ödənilməyib',
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-
-  const orderColumns = new Set((await all('PRAGMA table_info(orders)')).map((col) => col.name));
-  const orderColumnsToAdd = ['device_model', 'is_onsite', 'address', 'latitude', 'longitude', 'payment_method', 'payment_status', 'quoted_price', 'final_price'];
-  for (const column of orderColumnsToAdd) {
-    if (!orderColumns.has(column)) {
-      const typeMap = {
-        device_model: 'TEXT', quoted_price: 'REAL DEFAULT 0', final_price: 'REAL DEFAULT 0',
-        is_onsite: 'INTEGER NOT NULL DEFAULT 0', address: 'TEXT', latitude: 'REAL', longitude: 'REAL',
-        payment_method: "TEXT NOT NULL DEFAULT 'later'", payment_status: "TEXT NOT NULL DEFAULT 'Ödənilməyib'"
-      };
-      await run(`ALTER TABLE orders ADD COLUMN ${column} ${typeMap[column]}`);
-    }
-  }
+  return pool.query(convertPlaceholders(sql), params).then((result) => result.rows || []);
 }
 
 async function ensureDefaultServices() {
@@ -571,7 +496,7 @@ async function ensureDefaultServices() {
     }
   }
 
-  await run('INSERT INTO service_seed_state (id) VALUES (?)', [1]);
+  await run('INSERT INTO service_seed_state (id) VALUES (?) ON CONFLICT (id) DO NOTHING', [1]);
 }
 
 async function ensurePostgresDatabase() {
@@ -605,210 +530,8 @@ async function ensurePostgresDatabase() {
   await ensureDefaultServices();
 }
 
-async function safeAddColumn(tableName, columnName, columnType = 'TEXT', defaultExpression = '') {
-  try {
-    const tableInfo = await all(`PRAGMA table_info(${tableName})`);
-    const exists = new Set((tableInfo || []).map((column) => column.name));
-    if (exists.has(columnName)) {
-      return;
-    }
-
-    const definition = defaultExpression ? `${columnType} ${defaultExpression}` : columnType;
-    await run(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
-  } catch (error) {
-    console.warn(`Schema migration warning for ${tableName}.${columnName}:`, error.message || error);
-  }
-}
-
-async function ensureChatMessagesTable() {
-  await run(`
-    CREATE TABLE IF NOT EXISTS chat_messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      session_id TEXT NOT NULL,
-      sender_type TEXT NOT NULL CHECK(sender_type IN ('customer', 'admin', 'bot')),
-      message TEXT NOT NULL,
-      customer_name TEXT,
-      customer_phone TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-
-  await safeAddColumn('chat_messages', 'customer_name', 'TEXT');
-  await safeAddColumn('chat_messages', 'customer_phone', 'TEXT');
-}
-
 async function ensureDatabase() {
-  if (usePostgres) {
-    await ensurePostgresDatabase();
-    return;
-  }
-
-  await ensureOrdersTable();
-
-  await run(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      email TEXT UNIQUE NOT NULL,
-      username TEXT,
-      password_hash TEXT NOT NULL,
-      role TEXT NOT NULL DEFAULT 'ADMIN',
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-
-  const userColumns = new Set((await all('PRAGMA table_info(users)')).map((col) => col.name));
-  if (!userColumns.has('role')) {
-    await run("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'ADMIN'");
-  }
-  if (!userColumns.has('username')) {
-    await run('ALTER TABLE users ADD COLUMN username TEXT');
-  }
-
-  await run(`
-    CREATE TABLE IF NOT EXISTS admins (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      role TEXT NOT NULL DEFAULT 'ADMIN',
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-
-  const adminColumns = new Set((await all('PRAGMA table_info(admins)')).map((col) => col.name));
-  if (!adminColumns.has('role')) {
-    await run("ALTER TABLE admins ADD COLUMN role TEXT NOT NULL DEFAULT 'ADMIN'");
-  }
-
-  await run(`
-    CREATE TABLE IF NOT EXISTS services (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL UNIQUE,
-      category TEXT NOT NULL DEFAULT 'Genel',
-      price REAL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-
-  await ensureChatMessagesTable();
-
-  await run(`
-    CREATE TABLE IF NOT EXISTS requests (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      tracking_code TEXT UNIQUE NOT NULL,
-      customer_name TEXT NOT NULL,
-      customer_phone TEXT NOT NULL,
-      service_name TEXT NOT NULL,
-      device_model TEXT,
-      device_info TEXT,
-      status TEXT NOT NULL DEFAULT 'Gözləmədə',
-      quoted_price REAL DEFAULT 0,
-      final_price REAL DEFAULT 0,
-      is_onsite INTEGER NOT NULL DEFAULT 0,
-      address TEXT,
-      latitude REAL,
-      longitude REAL,
-      payment_method TEXT NOT NULL DEFAULT 'later',
-      payment_status TEXT NOT NULL DEFAULT 'Ödənilməyib',
-      idempotency_key TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-
-  await safeAddColumn('requests', 'idempotency_key', 'TEXT');
-  await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_requests_idempotency_key ON requests (idempotency_key) WHERE idempotency_key IS NOT NULL');
-
-  const chatTableDefinition = await get("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'chat_messages'");
-  if (!chatTableDefinition || !chatTableDefinition.sql || !chatTableDefinition.sql.includes("'bot'")) {
-    const migrateChatTable = async () => {
-      try {
-        const existingRows = await all('SELECT * FROM chat_messages ORDER BY id ASC');
-        await run('ALTER TABLE chat_messages RENAME TO chat_messages_old');
-        await run(`
-          CREATE TABLE chat_messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id TEXT NOT NULL,
-            sender_type TEXT NOT NULL CHECK(sender_type IN ('customer', 'admin', 'bot')),
-            message TEXT NOT NULL,
-            customer_name TEXT,
-            customer_phone TEXT,
-            created_at TEXT NOT NULL DEFAULT (datetime('now'))
-          )
-        `);
-        if (existingRows.length) {
-          const columns = ['id', 'session_id', 'sender_type', 'message', 'customer_name', 'customer_phone', 'created_at'];
-          for (const row of existingRows) {
-            await run(
-              `INSERT INTO chat_messages (${columns.join(', ')}) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-              [row.id, row.session_id, row.sender_type, row.message, row.customer_name || null, row.customer_phone || null, row.created_at]
-            );
-          }
-        }
-        await run('DROP TABLE chat_messages_old');
-      } catch (error) {
-        console.warn('Schema migration warning for chat_messages:', error.message || error);
-      }
-    };
-
-    const tableExists = await get("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'chat_messages'");
-    if (tableExists) {
-      await migrateChatTable();
-    } else {
-      await run(`
-        CREATE TABLE chat_messages (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          session_id TEXT NOT NULL,
-          sender_type TEXT NOT NULL CHECK(sender_type IN ('customer', 'admin', 'bot')),
-          message TEXT NOT NULL,
-          customer_name TEXT,
-          customer_phone TEXT,
-          created_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )
-      `);
-    }
-  }
-
-  const requestColumns = new Set((await all('PRAGMA table_info(requests)')).map((col) => col.name));
-  const requestColumnsToAdd = ['device_model', 'is_onsite', 'address', 'latitude', 'longitude', 'payment_method', 'payment_status', 'idempotency_key'];
-  for (const column of requestColumnsToAdd) {
-    if (!requestColumns.has(column)) {
-      const typeMap = {
-        device_model: 'TEXT',
-        is_onsite: 'INTEGER NOT NULL DEFAULT 0',
-        address: 'TEXT',
-        latitude: 'REAL',
-        longitude: 'REAL',
-        payment_method: "TEXT NOT NULL DEFAULT 'later'",
-        payment_status: "TEXT NOT NULL DEFAULT 'Ödənilməyib'"
-      };
-      await run(`ALTER TABLE requests ADD COLUMN ${column} ${typeMap[column]}`);
-    }
-  }
-
-  const serviceColumns = new Set((await all('PRAGMA table_info(services)')).map((col) => col.name));
-  if (!serviceColumns.has('price')) {
-    await run('ALTER TABLE services ADD COLUMN price REAL DEFAULT 0');
-  }
-
-  const superAdminPasswordHash = bcrypt.hashSync(ADMIN_PASSWORD, 10);
-  const userLookupArgs = SUPER_ADMIN_EMAIL_ALIASES.flatMap((candidate) => [candidate, candidate]);
-  const userLookupQuery = `SELECT * FROM users WHERE ${SUPER_ADMIN_EMAIL_ALIASES.map(() => 'LOWER(email) = LOWER(?) OR LOWER(username) = LOWER(?)').join(' OR ')}`;
-  const userRecord = await get(userLookupQuery, userLookupArgs);
-  if (!userRecord) {
-    await run('INSERT INTO users (email, username, password_hash, role) VALUES (?, ?, ?, ?)', [ADMIN_USERNAME, ADMIN_USERNAME, superAdminPasswordHash, SUPER_ADMIN_ROLE]);
-    console.log(`Default super admin created: ${ADMIN_USERNAME}`);
-  } else {
-    await run('UPDATE users SET email = ?, username = ?, password_hash = ?, role = ? WHERE id = ?', [ADMIN_USERNAME, ADMIN_USERNAME, superAdminPasswordHash, SUPER_ADMIN_ROLE, userRecord.id]);
-  }
-
-  const legacyAdmin = await get('SELECT * FROM admins WHERE LOWER(username) = LOWER(?)', [ADMIN_USERNAME]);
-  if (!legacyAdmin) {
-    await run('INSERT INTO admins (username, password_hash, role) VALUES (?, ?, ?)', [ADMIN_USERNAME, superAdminPasswordHash, SUPER_ADMIN_ROLE]);
-  } else {
-    await run('UPDATE admins SET password_hash = ?, role = ? WHERE id = ?', [superAdminPasswordHash, SUPER_ADMIN_ROLE, legacyAdmin.id]);
-  }
-
-  await ensureDefaultServices();
+  await ensurePostgresDatabase();
 }
 
 async function startServer() {
@@ -835,12 +558,7 @@ function shutdown(signal) {
       process.exit();
     };
 
-    if (usePostgres) {
-      pool.end().then(() => closeDatabase()).catch(closeDatabase);
-      return;
-    }
-
-    db.close(closeDatabase);
+    pool.end().then(() => closeDatabase()).catch(closeDatabase);
   });
 }
 

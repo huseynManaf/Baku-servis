@@ -10,8 +10,7 @@
     "cap:add-android": "npx cap add android",
     "cap:open-android": "npx cap open android",
     "cap:copy": "npx cap copy",
-    "cap:sync": "npx cap sync",
-    "postinstall": "npm rebuild sqlite3 --build-from-source=false"
+    "cap:sync": "npx cap sync"
   },
   "dependencies": {
     "@capacitor/android": "^5.0.4",
@@ -24,9 +23,7 @@
     "express-session": "^1.18.0",
     "nodemailer": "^6.10.1",
     "pg": "^8.23.0",
-    "socket.io": "^4.8.1",
-    "sql.js": "^1.14.2",
-    "sqlite3": "^5.1.7"
+    "socket.io": "^4.8.1"
   },
   "engines": {
     "node": ">=18.0.0"
