@@ -21,14 +21,11 @@
 
   function setScreen(screen) {
     if (!screen) return;
+    if (screen === 'tracking') screen = 'my-requests';
     body.classList.add('app-screen-mode');
     body.classList.toggle('form-focus-mode', ['request', 'my-requests', 'contact'].includes(screen));
     screens.forEach((item) => item.dataset.screenActive = item.dataset.screen === screen ? 'true' : 'false');
-    const orderSection = document.getElementById('order-section');
-    const trackingCard = document.getElementById('track');
-    if (orderSection) orderSection.dataset.screenActive = screen === 'my-requests' || screen === 'request' ? 'true' : 'false';
-    if (trackingCard) trackingCard.dataset.screenActive = screen === 'my-requests' ? 'true' : 'false';
-    links.forEach((link) => link.classList.toggle('is-active', link.dataset.screenLink === screen));
+    links.forEach((link) => link.classList.toggle('is-active', link.dataset.screenLink === screen || (screen === 'my-requests' && link.dataset.screenLink === 'tracking')));
     localStorage.setItem('bakuservis-screen', screen);
     window.dispatchEvent(new CustomEvent('bakuservis:screen', { detail: screen }));
     closeDrawer();
@@ -61,13 +58,7 @@
   });
 
   const initialScreen = localStorage.getItem('bakuservis-screen') || 'home';
-  if (window.matchMedia('(max-width: 920px)').matches) setScreen(initialScreen);
-  window.addEventListener('resize', () => {
-    if (!window.matchMedia('(max-width: 920px)').matches) {
-      body.classList.remove('app-screen-mode');
-      screens.forEach((item) => delete item.dataset.screenActive);
-    }
-  });
+  setScreen(initialScreen);
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').then(async (registration) => {

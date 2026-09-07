@@ -35,10 +35,9 @@
   const paymentConfirmation = document.getElementById('payment-confirmation');
   const payNowBtn = document.getElementById('pay-now-btn');
   const payLaterBtn = document.getElementById('pay-later-btn');
-  const liveBoard = document.getElementById('live-board');
   const myRequestsList = document.getElementById('my-requests-list');
-  const unifiedTrackingForm = document.getElementById('unified-tracking-form');
-  const unifiedTrackingInput = document.getElementById('unified-tracking-input');
+  const unifiedTrackingForm = document.getElementById('track-form');
+  const unifiedTrackingInput = document.getElementById('tracking_code');
   const unifiedTrackingMessage = document.getElementById('unified-tracking-message');
   const requestSubmitButton = requestForm?.querySelector('button[type="submit"]');
   let activeTrackingId = null;
@@ -194,28 +193,6 @@
     }
   }
 
-  unifiedTrackingForm?.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const value = String(unifiedTrackingInput?.value || '').trim();
-    if (!value) return;
-    const looksLikePhone = !/^HG-/i.test(value) && /\d/.test(value);
-    if (looksLikePhone && !/[a-z]/i.test(value)) {
-      const phone = sanitizePhone(value);
-      setStoredCustomerIdentity('', normalizePhone(phone));
-      if (trackingResult) trackingResult.style.display = 'none';
-      if (unifiedTrackingMessage) unifiedTrackingMessage.textContent = 'Müraciətləriniz yüklənir...';
-      await loadMyRequests();
-      if (unifiedTrackingMessage) unifiedTrackingMessage.textContent = 'Müraciətlər ən yenidən köhnəyə sıralanıb.';
-      return;
-    }
-
-    if (unifiedTrackingMessage) unifiedTrackingMessage.textContent = 'Sifariş detalları yüklənir...';
-    const trackingInput = document.getElementById('tracking_code');
-    if (trackingInput) trackingInput.value = value;
-    if (trackForm) trackForm.dispatchEvent(new Event('submit'));
-    if (unifiedTrackingMessage) unifiedTrackingMessage.textContent = 'Sifariş detalları aşağıda göstərilir.';
-  });
-
   function isWithinAzerbaijan(lat, lng) {
     return Number(lat) >= 38.3 && Number(lat) <= 41.9 && Number(lng) >= 44.7 && Number(lng) <= 50.9;
   }
@@ -312,59 +289,6 @@
     }
 
     return true;
-  }
-
-  function getLiveBoardStatusClass(status) {
-    const value = String(status || '').trim().toLowerCase();
-    if (value.includes('gözləm') || value.includes('pending')) return 'status-yeni';
-    if (value.includes('icra') || value.includes('in work') || value.includes('process')) return 'status-icrada';
-    if (value.includes('hazır') || value.includes('ready')) return 'status-hazir';
-    if (value.includes('təhvil') || value.includes('verildi') || value.includes('delivered')) return 'status-teslim';
-    return 'status-qiymetlendirildi';
-  }
-
-  function getLiveBoardStatusLabel(status) {
-    const value = String(status || '').trim();
-    if (!value) return 'Gözləmədə';
-    if (value.toLowerCase().includes('gözləm')) return 'Gözləmədə';
-    if (value.toLowerCase().includes('icra')) return 'İcrada';
-    if (value.toLowerCase().includes('hazır')) return 'Hazırdır';
-    if (value.toLowerCase().includes('təhvil') || value.toLowerCase().includes('verildi')) return 'Təhvil verildi';
-    return value;
-  }
-
-  function renderLiveBoard(orders) {
-    if (!liveBoard) return;
-
-    const fallback = [
-      { service_name: 'Laptop Format', device_model: 'Lenovo ThinkPad', status: 'İcrada' },
-      { service_name: 'Virus Təmizliyi', device_model: 'HP Pavilion', status: 'Hazırdır' },
-      { service_name: 'SSD Quraşdırma', device_model: 'Dell Latitude', status: 'Qiymətləndirildi' },
-      { service_name: 'BIOS Reset', device_model: 'Acer Aspire', status: 'Gözləmədə' }
-    ];
-
-    const items = Array.isArray(orders) && orders.length ? orders : fallback;
-    liveBoard.innerHTML = items.map((item) => `
-      <div class="ticket">
-        <div>
-          <div class="tname">${String(item.service_name || 'Xidmət').trim() || 'Xidmət'}</div>
-          <div class="tdev">${String(item.device_model || 'Model bilinmir').trim() || 'Model bilinmir'}</div>
-        </div>
-        <span class="status-chip ${getLiveBoardStatusClass(item.status)}">${getLiveBoardStatusLabel(item.status)}</span>
-      </div>
-    `).join('');
-  }
-
-  async function refreshLiveBoard() {
-    try {
-      const response = await fetch('/api/orders/live-board');
-      if (!response.ok) throw new Error(`Live board request failed: ${response.status}`);
-      const data = await response.json();
-      renderLiveBoard(Array.isArray(data.orders) ? data.orders : []);
-    } catch (error) {
-      console.error('refreshLiveBoard error:', error);
-      renderLiveBoard([]);
-    }
   }
 
   function populateServices(services) {
@@ -860,15 +784,7 @@
       if (paymentMethodSelect) paymentMethodSelect.value = 'prepay';
       setMessage(`Müraciət yarandı. İzləmə kodu: ${body.tracking_code || 'HG-XXXXXX'} · ${body.created_at || 'indiki vaxt'}`, 'success');
 
-      if (body.request_id) {
-        activeTrackingId = Number(body.request_id);
-        showPaymentChoicePanel({
-          id: activeTrackingId,
-          payment_method: body.payment_method || 'later',
-          payment_status: body.payment_status || 'Ödənilməyib',
-          final_price: 0
-        });
-      }
+      postSubmitChoice?.style.setProperty('display', 'none');
     } catch (error) {
       console.error('requestForm error:', error);
       setMessage('Serverə qoşularkən xəta baş verdi.', 'error');
@@ -885,6 +801,15 @@
     event.preventDefault();
     const trackingCode = document.getElementById('tracking_code').value.trim();
     if (!trackingCode) {
+      return;
+    }
+
+    const looksLikePhone = !/^HG-/i.test(trackingCode) && /\d/.test(trackingCode) && !/[a-z]/i.test(trackingCode);
+    if (looksLikePhone) {
+      setStoredCustomerIdentity('', normalizePhone(sanitizePhone(trackingCode)));
+      if (trackingResult) trackingResult.style.display = 'none';
+      if (unifiedTrackingMessage) unifiedTrackingMessage.textContent = 'Müraciətlər ən yenidən köhnəyə sıralanıb.';
+      await loadMyRequests();
       return;
     }
 
@@ -1120,6 +1045,4 @@
   setupOnsiteMap();
   initCustomerChat();
   loadServices();
-  refreshLiveBoard();
-  setInterval(refreshLiveBoard, 15000);
 });

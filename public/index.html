@@ -131,8 +131,8 @@
         </a>
 
         <div class="nav-links">
-          <a href="#services">Xidmətlər</a>
-          <a href="#order-section">Müraciət</a>
+          <a href="#services" data-screen-link="services">Xidmətlər</a>
+          <a href="#order-section" data-screen-link="request">Müraciət</a>
           <a href="#my-requests" data-screen-link="my-requests">Müraciətlərim</a>
           <a href="/download" class="nav-download app-download-only-web" aria-label="Android tətbiqini yüklə">Tətbiqi Yüklə</a>
         </div>
@@ -188,13 +188,6 @@
             </div>
           </div>
 
-          <div class="ticket-board" aria-label="Sifariş status paneli">
-            <div class="ticket-board-head">
-              <span>İzləmə lövhəsi</span>
-              <div class="live"><i></i> Canlı</div>
-            </div>
-            <div id="live-board" class="live-board-list"></div>
-          </div>
         </div>
       </section>
 
@@ -420,59 +413,6 @@
               </form>
             </div>
 
-            <div class="form-card tracking-card app-screen" id="track" data-screen="tracking">
-              <div class="tracking-header">
-                <div>
-                  <span class="eyebrow">İzləmə</span>
-                  <h3>Servis statusu</h3>
-                </div>
-                <div class="mini-pill">Live</div>
-              </div>
-
-              <form id="track-form" novalidate class="tracking-form">
-                <div class="field">
-                  <label for="tracking_code">İzləmə kodu və ya telefon nömrəsi</label>
-                  <input id="tracking_code" type="text" placeholder="HG-ABCD12 və ya 050 123 45 67" required autocomplete="off" aria-label="İzləmə kodu və ya telefon nömrəsi" />
-                </div>
-                <button type="submit" class="btn btn-primary btn-block">Axtar</button>
-              </form>
-
-              <div id="tracking-result" class="track-result" style="display: none;">
-                <div class="track-head">
-                  <div>
-                    <div class="meta-label">Xidmət</div>
-                    <h3 id="result-service">-</h3>
-                    <div class="meta" id="result-device">-</div>
-                  </div>
-                  <span class="status-chip status-yeni" id="result-status">-</span>
-                </div>
-
-                <div class="tracking-details">
-                  <div class="meta"><span>Yaradılma</span><strong id="result-created">-</strong></div>
-                  <div class="meta"><span>Status yenilənmə</span><strong id="result-updated">-</strong></div>
-                  <div class="meta"><span>İlkin / Təklif olunan</span><strong id="result-quoted">-</strong></div>
-                  <div class="meta"><span>Yekun ödəniləcək</span><strong id="result-final">-</strong></div>
-                  <div class="meta"><span>Ödəniş üsulu</span><strong id="result-payment-method">-</strong></div>
-                  <div class="meta"><span>Ödəniş statusu</span><strong id="result-payment-status">-</strong></div>
-                  <div id="result-address-wrap" class="meta" style="display:none;"><span>Ünvan</span><strong id="result-address">-</strong></div>
-                </div>
-
-                <div id="post-submit-choice" class="post-submit-choice" style="display:none; margin-top: 18px;">
-                  <div class="choice-title">Ödəniş seçimi</div>
-                  <div class="choice-description">Bu sifariş hələ ödənilməmişdir.</div>
-                  <div class="choice-actions">
-                    <button type="button" id="pay-now-btn" class="btn btn-primary btn-block">💳 İndi Öncədən Ödə (Kartla)</button>
-                    <button type="button" id="pay-later-btn" class="btn btn-outline btn-block">🚚 Təhvil Alarkən Ödə</button>
-                  </div>
-                </div>
-                <div id="payment-confirmation" class="payment-confirmation" style="display:none; margin-top: 18px;">
-                  ✅ Ödəniş üsulu təsdiqləndi: Təhvil veriləndə ödəniləcək
-                </div>
-                <div id="pay-button-wrap" style="display:none; margin-top: 14px;">
-                  <button type="button" id="pay-button" class="btn btn-primary btn-block">Onlayn Ödə</button>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </section>
@@ -517,16 +457,24 @@
           <h2>İzləmə və Müraciətlərim</h2>
           <p>İzləmə kodunuzu və ya telefon nömrənizi daxil edin. Telefon nömrəsi ilə bütün müraciətləriniz, kod ilə isə konkret sifarişin detalları göstərilir.</p>
         </div>
-        <form id="unified-tracking-form" class="unified-tracking-form" novalidate>
+        <form id="track-form" class="unified-tracking-form" novalidate>
           <label for="unified-tracking-input">İzləmə kodu və ya telefon nömrəsi</label>
           <div class="unified-tracking-row">
-            <input id="unified-tracking-input" type="text" placeholder="HG-ABCD12 və ya 050 123 45 67" autocomplete="off" />
+            <input id="tracking_code" type="text" placeholder="HG-ABCD12 və ya 050 123 45 67" autocomplete="off" />
             <button type="submit" class="btn btn-primary">Axtar</button>
           </div>
           <small id="unified-tracking-message" class="field-hint"></small>
         </form>
         <div id="my-requests-list" class="my-requests-list">
           <div class="my-requests-empty">Telefon nömrənizi daxil etdikdə müraciətləriniz burada görünəcək.</div>
+        </div>
+        <div class="form-card tracking-card unified-detail-card" id="track-details">
+          <div id="tracking-result" class="track-result" style="display:none;">
+            <div class="track-head"><div><div class="meta-label">Xidmət</div><h3 id="result-service">-</h3><div class="meta" id="result-device">-</div></div><span class="status-chip status-yeni" id="result-status">-</span></div>
+            <div class="tracking-details"><div class="meta"><span>Yaradılma</span><strong id="result-created">-</strong></div><div class="meta"><span>Status yenilənmə</span><strong id="result-updated">-</strong></div><div class="meta"><span>İlkin / Təklif olunan</span><strong id="result-quoted">-</strong></div><div class="meta"><span>Yekun ödəniləcək</span><strong id="result-final">-</strong></div><div class="meta"><span>Ödəniş üsulu</span><strong id="result-payment-method">-</strong></div><div class="meta"><span>Ödəniş statusu</span><strong id="result-payment-status">-</strong></div><div id="result-address-wrap" class="meta" style="display:none;"><span>Ünvan</span><strong id="result-address">-</strong></div></div>
+            <div id="post-submit-choice" class="post-submit-choice" style="display:none; margin-top:18px;"><div class="choice-title">Ödəniş seçimi</div><div class="choice-description">Bu sifariş hələ ödənilməmişdir.</div><div class="choice-actions"><button type="button" id="pay-now-btn" class="btn btn-primary btn-block">İndi Öncədən Ödə</button><button type="button" id="pay-later-btn" class="btn btn-outline btn-block">Təhvil Alarkən Ödə</button></div></div>
+            <div id="payment-confirmation" class="payment-confirmation" style="display:none; margin-top:18px;">✅ Ödəniş üsulu təsdiqləndi.</div><div id="pay-button-wrap" style="display:none; margin-top:14px;"><button type="button" id="pay-button" class="btn btn-primary btn-block">Onlayn Ödə</button></div>
+          </div>
         </div>
       </div>
     </section>
