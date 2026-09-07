@@ -21,6 +21,7 @@
   const closePaymentModal = document.getElementById('close-payment-modal');
   const paymentForm = document.getElementById('payment-form');
   const paymentMethodSelect = document.getElementById('payment_method');
+  const paymentChoiceInputs = [...document.querySelectorAll('input[name="payment_choice"]')];
   const cardNumberInput = document.getElementById('card-number');
   const cardExpiryInput = document.getElementById('card-expiry');
   const cardCvcInput = document.getElementById('card-cvc');
@@ -36,7 +37,15 @@
   const requestSubmitButton = requestForm?.querySelector('button[type="submit"]');
   let activeTrackingId = null;
   let requestSubmitting = false;
+  let cachedTrackingRequest = null;
   const AZERBAIJANI_PHONE_REGEX = /^(\+994|994|0)?(50|51|55|60|70|77|99)\d{7}$/;
+
+  paymentChoiceInputs.forEach((input) => {
+    input.addEventListener('change', () => {
+      if (paymentMethodSelect) paymentMethodSelect.value = input.value;
+      paymentChoiceInputs.forEach((choice) => choice.closest('.radio-opt')?.classList.toggle('active', choice.checked));
+    });
+  });
 
   const onsiteToggle = document.getElementById('is_onsite');
   const onsiteMapWrap = document.getElementById('onsite-map-wrap');
@@ -548,18 +557,10 @@
     if (!postSubmitChoice) return;
 
     const normalizedPaymentMethod = String(request?.payment_method || '').toLowerCase();
-    const normalizedPaymentStatus = String(request?.payment_status || '').toLowerCase();
-    const shouldConfirmCash = normalizedPaymentMethod === 'later' || normalizedPaymentStatus.includes('təhvil') || normalizedPaymentStatus.includes('veril') || normalizedPaymentStatus.includes('cash');
 
     if (!request || (request.payment_status || 'Ödənilməyib') === 'Ödənilib') {
       postSubmitChoice.style.display = 'none';
       setPaymentConfirmation(false);
-      return;
-    }
-
-    if (shouldConfirmCash) {
-      postSubmitChoice.style.display = 'none';
-      setPaymentConfirmation(true, '✅ Ödəniş üsulu təsdiqləndi: Təhvil veriləndə ödəniləcək');
       return;
     }
 
@@ -568,8 +569,8 @@
     postSubmitChoice.dataset.requestId = request.id || activeTrackingId || '';
 
     const text = request.payment_method === 'prepay'
-      ? 'Ödəniş seçimi: kartla əvvəlcədən ödəniş və ya təhvil alarkən ödə.'
-      : 'Bu sifariş hələ ödənilməmişdir. Siz istədiyiniz ödəniş üsulunu seçə bilərsiniz.';
+      ? 'Qiymətləndirmədən sonra kartla öncədən ödəniş seçilib. İstəsəniz, ödənişi təhvil zamanı da edə bilərsiniz.'
+      : 'Əsas ödəniş təmir tamamlandıqdan sonra edilir. Qiymətləndirmədən sonra kartla öncədən ödəniş də seçə bilərsiniz.';
 
     const title = postSubmitChoice.querySelector('.choice-title');
     const description = postSubmitChoice.querySelector('.choice-description');
@@ -752,6 +753,11 @@
       setStoredCustomerIdentity(customerName, customerPhone);
 
       requestForm.reset();
+      if (paymentMethodSelect) paymentMethodSelect.value = 'later';
+      paymentChoiceInputs.forEach((choice) => {
+        choice.checked = choice.value === 'later';
+        choice.closest('.radio-opt')?.classList.toggle('active', choice.checked);
+      });
       if (onsiteToggle) onsiteToggle.checked = false;
       if (onsiteMapWrap) onsiteMapWrap.classList.remove('visible');
       if (onsiteAddressInput) onsiteAddressInput.value = '';
@@ -799,6 +805,9 @@
       }
 
       const request = body.request || {};
+      cachedTrackingRequest = request;
+      localStorage.setItem('bakuservis-last-tracking', JSON.stringify(request));
+      window.BakuServisPush?.refresh(request.tracking_code || trackingCode).catch((error) => console.warn('Push subscription unavailable:', error));
       activeTrackingId = request.id || null;
       if (request.customer_name || request.customer_phone) {
         setStoredCustomerIdentity(request.customer_name, request.customer_phone);
@@ -831,8 +840,33 @@
       trackingResult.style.display = 'block';
     } catch (error) {
       console.error('trackForm error:', error);
-      alert('İzləmə məlumatı alınarkən xəta baş verdi.');
+      const cached = JSON.parse(localStorage.getItem('bakuservis-last-tracking') || 'null');
+      if (cached && String(cached.tracking_code || '').toLowerCase() === trackingCode.toLowerCase()) {
+        cachedTrackingRequest = cached;
+        activeTrackingId = cached.id || null;
+        resultService.textContent = cached.service_name || '-';
+        resultDevice.textContent = cached.device_info || 'Cihaz məlumatı yoxdur';
+        resultStatus.textContent = `${cached.status || 'Gözləmədə'} (offline)`;
+        resultStatus.className = `status-chip ${statusClass(cached.status)}`;
+        resultCreated.textContent = formatDate(cached.created_at);
+        resultUpdated.textContent = formatDate(cached.updated_at);
+        trackingResult.style.display = 'block';
+      } else {
+        alert('İzləmə məlumatı alınarkən xəta baş verdi.');
+      }
     }
+  });
+
+  window.addEventListener('bakuservis:status', (event) => {
+    const request = event.detail;
+    if (!request || !cachedTrackingRequest || request.id !== cachedTrackingRequest.id) return;
+    cachedTrackingRequest = { ...cachedTrackingRequest, ...request };
+    localStorage.setItem('bakuservis-last-tracking', JSON.stringify(cachedTrackingRequest));
+    if (resultStatus) {
+      resultStatus.textContent = request.status || 'Gözləmədə';
+      resultStatus.className = `status-chip ${statusClass(request.status)}`;
+    }
+    if (resultUpdated) resultUpdated.textContent = formatDate(request.updated_at);
   });
 
   payButton?.addEventListener('click', openPaymentModal);

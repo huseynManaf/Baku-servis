@@ -10,6 +10,7 @@ const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
 const { Pool } = require('pg');
 const { Server } = require('socket.io');
+const webpush = require('web-push');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -34,6 +35,10 @@ const pool = new Pool({
   max: Number(process.env.DATABASE_POOL_MAX || 10)
 });
 pool.on('error', (error) => console.error('PostgreSQL pool error:', error));
+const VAPID_PUBLIC_KEY = String(process.env.VAPID_PUBLIC_KEY || '').trim();
+const VAPID_PRIVATE_KEY = String(process.env.VAPID_PRIVATE_KEY || '').trim();
+const PUSH_SUBJECT = String(process.env.PUSH_SUBJECT || 'mailto:admin@bakuservis.az').trim();
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) webpush.setVapidDetails(PUSH_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
 const ADMIN_USERNAME = process.env.DEFAULT_ADMIN_USER || process.env.ADMIN_USER || 'huseynmanfli844@gmail.com';
 const ADMIN_PASSWORD = process.env.DEFAULT_ADMIN_PASS || process.env.ADMIN_PASS || 'Baku2019';
@@ -513,6 +518,7 @@ async function ensurePostgresDatabase() {
   await run(`CREATE TABLE IF NOT EXISTS requests (${requestSchema})`);
   await run(`CREATE TABLE IF NOT EXISTS orders (${requestSchema})`);
   await run(`CREATE TABLE IF NOT EXISTS chat_messages (id SERIAL PRIMARY KEY, session_id TEXT NOT NULL, sender_type TEXT NOT NULL CHECK(sender_type IN ('customer', 'admin', 'bot')), message TEXT NOT NULL, customer_name TEXT, customer_phone TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
+  await run(`CREATE TABLE IF NOT EXISTS push_subscriptions (id SERIAL PRIMARY KEY, tracking_code TEXT NOT NULL, endpoint TEXT UNIQUE NOT NULL, subscription JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
   await run('ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS customer_name TEXT');
   await run('ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS customer_phone TEXT');
   await run('ALTER TABLE requests ADD COLUMN IF NOT EXISTS idempotency_key TEXT');
@@ -627,6 +633,38 @@ app.get('/download', (req, res) => {
 app.get('/health', (req, res) => {
   res.status(200).send('Baku Servis backend is running!');
 });
+
+app.get('/api/push/public-key', (req, res) => {
+  if (!VAPID_PUBLIC_KEY) return res.status(503).json({ enabled: false });
+  return res.json({ enabled: true, publicKey: VAPID_PUBLIC_KEY });
+});
+
+app.post('/api/push/subscribe', async (req, res) => {
+  try {
+    const trackingCode = String(req.body.tracking_code || '').trim().toUpperCase();
+    const subscription = req.body.subscription;
+    if (!trackingCode || !subscription?.endpoint) return res.status(400).json({ error: 'İzləmə kodu və push subscription tələb olunur.' });
+    await run(`INSERT INTO push_subscriptions (tracking_code, endpoint, subscription, updated_at) VALUES (?, ?, ?::jsonb, ?) ON CONFLICT (endpoint) DO UPDATE SET tracking_code = EXCLUDED.tracking_code, subscription = EXCLUDED.subscription, updated_at = EXCLUDED.updated_at`, [trackingCode, subscription.endpoint, JSON.stringify(subscription), nowIso()]);
+    return res.status(201).json({ ok: true });
+  } catch (error) {
+    console.error('POST /api/push/subscribe error:', error);
+    return res.status(500).json({ error: 'Push subscription yadda saxlanmadı.' });
+  }
+});
+
+async function notifyStatusSubscribers(request) {
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY || !request?.tracking_code) return;
+  const subscriptions = await all('SELECT id, subscription FROM push_subscriptions WHERE tracking_code = ?', [request.tracking_code]);
+  const payload = JSON.stringify({ title: 'Baku Servis servis statusu', body: `${request.tracking_code}: ${request.status}`, url: `/#track?code=${encodeURIComponent(request.tracking_code)}` });
+  await Promise.all(subscriptions.map(async (row) => {
+    try {
+      await webpush.sendNotification(row.subscription, payload);
+    } catch (error) {
+      if (error.statusCode === 404 || error.statusCode === 410) await run('DELETE FROM push_subscriptions WHERE id = ?', [row.id]);
+      else console.error('Push notification error:', error.message);
+    }
+  }));
+}
 
 app.post('/api/telegram/webhook', async (req, res) => {
   const configuredSecret = String(process.env.TELEGRAM_WEBHOOK_SECRET || '').trim();
@@ -1057,6 +1095,8 @@ app.put('/api/admin/requests/:id', requireAdmin, async (req, res) => {
     `, [status, quoted_price, final_price, normalizedPaymentMethod, payment_status, nowIso(), id]);
 
     const row = await get('SELECT * FROM requests WHERE id = ?', [id]);
+    io.emit('request:status-updated', { request: row });
+    void notifyStatusSubscribers(row);
     return res.json({ ok: true, updated: row });
   } catch (error) {
     console.error('PUT /api/admin/requests/:id error:', error);

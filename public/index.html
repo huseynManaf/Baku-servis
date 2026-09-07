@@ -92,6 +92,7 @@
   <body>
     <nav class="nav">
       <div class="container">
+        <button type="button" class="drawer-trigger" id="drawer-trigger" aria-label="Yan menyunu aç" aria-expanded="false">☰</button>
         <a href="#" class="brand" aria-label="Baku Servis ana səhifə">
           <span class="brand-mark" aria-hidden="true">
             <svg viewBox="0 0 92 92" aria-hidden="true" focusable="false">
@@ -136,18 +137,27 @@
           <a href="/download" class="nav-download" aria-label="Android tətbiqini yüklə">Tətbiqi Yüklə</a>
         </div>
 
-        <div class="nav-cta">
-          <a href="#" class="tel-badge" data-tel="tel:+994707164142" aria-label="Telefonla zəng et">
-            <span class="tel-icon" aria-hidden="true">📞</span>
-            <span>+994 70 716 41 42</span>
-          </a>
-          <button type="button" class="btn btn-outline btn-sm theme-toggle" id="theme-toggle" aria-label="Tema dəyişdir">Açıq</button>
-        </div>
       </div>
     </nav>
 
+    <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
+    <aside class="navigation-drawer" id="navigation-drawer" aria-label="Əsas menyu" aria-hidden="true">
+      <div class="drawer-head">
+        <strong>Baku Servis</strong>
+        <button type="button" class="btn btn-ghost" id="drawer-close" aria-label="Yan menyunu bağla">×</button>
+      </div>
+      <nav class="drawer-links">
+        <a href="#home" data-screen-link="home">Ana səhifə</a>
+        <a href="#services" data-screen-link="services">Xidmətlər</a>
+        <a href="#request-panel" data-screen-link="request">Müraciət</a>
+        <a href="#track" data-screen-link="tracking">Servis izləmə</a>
+        <a href="#contact" data-screen-link="contact">Əlaqə</a>
+        <a href="/download" class="drawer-download">Tətbiqi Yüklə</a>
+      </nav>
+    </aside>
+
     <main>
-      <section class="hero">
+      <section class="hero app-screen" id="home" data-screen="home">
         <div class="container hero-grid">
           <div>
             <span class="eyebrow">Peşəkar təmir Bakıda</span>
@@ -188,7 +198,7 @@
         </div>
       </section>
 
-      <section class="section" id="services">
+      <section class="section app-screen" id="services" data-screen="services">
         <div class="container">
           <div class="section-head">
             <span class="eyebrow">Xidmətlər</span>
@@ -201,21 +211,20 @@
         </div>
       </section>
 
-      <section class="section brand-showcase">
+      <section class="section brand-showcase app-screen" data-screen="home">
         <div class="container showcase-grid">
           <div class="showcase-copy">
             <span class="eyebrow">Niyə Baku Servis?</span>
             <h2>Texnologiya problemləri üçün peşəkar dəstək və sürətli həll</h2>
             <p>
-              Biz telefon, laptop, server, şəbəkə və biznes IT sistemlərinin diaqnostikasını, təmirini və monitorinqini bir yerə toplayırıq.
-              Sizin cihazınızı yalnız bərpa etmirik — onun iş qabiliyyətini, təhlükəsizliyini və davamlılığını təmin edirik.
+              Biz telefon, noutbuk, server, şəbəkə və biznes İT sistemlərinin diaqnostikasını, təmirini və monitorinqini vahid mərkəzdə birləşdiririk. Cihazınızı sadəcə bərpa etmirik — onun iş qabiliyyətini, təhlükəsizliyini və uzunmüddətli dayanıqlığını təmin edirik.
             </p>
 
             <ul class="trust-list">
-              <li>Peşəkar diaqnostika və operativ geri dönüş</li>
-              <li>Şəxsi və korporativ IT dəstəyi</li>
-              <li>Server, şəbəkə və sistem idarəetməsi</li>
-              <li>Azərbaycan bazarı üçün yerli dəstək və asan əlaqə</li>
+              <li>Peşəkar diaqnostika, şəffaf qiymət siyasəti və operativ geri dönüş</li>
+              <li>Şəxsi və korporativ İT sistemləri üçün fərdiləşdirilmiş dəstək</li>
+              <li>Server, şəbəkə arxitekturası və fasiləsiz infrastruktur idarəetməsi</li>
+              <li>Azərbaycan bazarı üçün xüsusi yerli dəstək, etibarlı zəmanət və asan əlaqə</li>
             </ul>
 
             <div class="showcase-actions">
@@ -274,7 +283,7 @@
         </div>
       </section>
 
-      <section class="section capability-section">
+      <section class="section capability-section app-screen" data-screen="home">
         <div class="container">
           <div class="section-head center-head">
             <span class="eyebrow">Biz nə edirik?</span>
@@ -286,7 +295,7 @@
               <div class="capability-icon">📱</div>
               <div class="capability-body">
                 <h3>Şəxsi Texnologiyalar</h3>
-                <p>Telefon, tablet və laptop üçün ekran dəyişimi, batareya, program təminatı, şəbəkə və data bərpası.</p>
+                <p>Smartfon, planşet və noutbuklar üçün orijinal komponentlərlə ekran/batareya əvəzlənməsi, peşəkar diaqnostika, əməliyyat sistemi və proqram təminatı, həmçinin təhlükəsiz data bərpası.</p>
               </div>
             </article>
 
@@ -294,7 +303,7 @@
               <div class="capability-icon">💼</div>
               <div class="capability-body">
                 <h3>Korporativ IT Dəstək</h3>
-                <p>İş yeri cihazları, antivirus, işçi kompüterlərinin optimallaşdırılması və daimi texniki dəstək.</p>
+                <p>Ofis şəbəkələri və iş yeri avadanlıqlarının quraşdırılması, korporativ lisenziyalı təhlükəsizlik həlləri, sistem optimallaşdırılması və daimi texniki nəzarət.</p>
               </div>
             </article>
 
@@ -302,7 +311,7 @@
               <div class="capability-icon">🖥️</div>
               <div class="capability-body">
                 <h3>Server və Şəbəkə</h3>
-                <p>Server monitorinqi, şəbəkə xəta ayırma, təhlükəsizlik, sənəd mübadiləsi və işgüzar sistemlərin işçi vəziyyəti.</p>
+                <p>Server sistemlərinin quraşdırılması və monitorinqi, şəbəkə arxitekturasının optimallaşdırılması, təhlükəsizlik protokollarının tətbiqi və fasiləsiz iş rejiminin təmin edilməsi.</p>
               </div>
             </article>
           </div>
@@ -328,7 +337,7 @@
         </div>
       </section>
 
-      <section class="section section-alt" id="order-section">
+      <section class="section section-alt app-screen" id="order-section" data-screen="request">
         <div class="container" id="request-panel">
           <div class="section-head">
             <span class="eyebrow">Müraciət</span>
@@ -359,11 +368,22 @@
                 </div>
 
                 <div class="field">
-                  <label for="payment_method">Ödəniş üsulu</label>
-                  <select id="payment_method" name="payment_method" required autocomplete="off" aria-label="Ödəniş üsulu">
-                    <option value="prepay">Öncədən Ödəniş (Onlayn Kartla)</option>
-                    <option value="later">Təmirdən / Təhvil Verildikdən Sonra Ödəniş</option>
+                  <span class="field-label">Ödəniş üsulu</span>
+                  <select id="payment_method" name="payment_method" class="sr-only" required autocomplete="off" aria-hidden="true" tabindex="-1">
+                    <option value="later" selected>Təmirdən sonra ödəniş</option>
+                    <option value="prepay">Qiymətləndirmədən sonra kartla ödəniş</option>
                   </select>
+                  <div class="payment-choice-group" role="radiogroup" aria-label="Ödəniş üsulu seçimi">
+                    <label class="radio-opt active">
+                      <input type="radio" name="payment_choice" value="later" checked />
+                      <span><strong>Təmirdən sonra ödəniş</strong><small>Əsas seçim</small></span>
+                    </label>
+                    <label class="radio-opt">
+                      <input type="radio" name="payment_choice" value="prepay" />
+                      <span><strong>Qiymətləndirmədən sonra kartla ödəniş</strong><small>İstəyə görə öncədən ödəniş</small></span>
+                    </label>
+                  </div>
+                  <small class="field-hint">Əsas ödəniş təmir tamamlandıqdan sonra edilir. İstəsəniz, qiymətləndirmədən sonra kartla öncədən ödəyə bilərsiniz.</small>
                 </div>
 
                 <div class="field">
@@ -396,7 +416,7 @@
               </form>
             </div>
 
-            <div class="form-card tracking-card" id="track">
+            <div class="form-card tracking-card app-screen" id="track" data-screen="tracking">
               <div class="tracking-header">
                 <div>
                   <span class="eyebrow">İzləmə</span>
@@ -453,7 +473,7 @@
         </div>
       </section>
 
-      <section class="section">
+      <section class="section app-screen" data-screen="home">
         <div class="container">
           <div class="section-head">
             <span class="eyebrow">Əməliyyat</span>
@@ -464,29 +484,55 @@
             <div class="step">
               <div class="num">01</div>
               <h4>Müraciət</h4>
-              <p>Gerekli məlumatlar doldurulur və servis seçilir.</p>
+              <p>Lazımi məlumatlar doldurulur və tələb olunan xidmət növü seçilir.</p>
             </div>
             <div class="step">
               <div class="num">02</div>
               <h4>Qiymətləndirmə</h4>
-              <p>Admin texniki qiyməti və statusu təyin edir.</p>
+              <p>Servis mütəxəssislərimiz tərəfindən ilkin qiymətləndirmə aparılaraq sizə ətraflı məlumat verilir.</p>
             </div>
             <div class="step">
               <div class="num">03</div>
-              <h4>İşin gedişi</h4>
-              <p>İşlərə başlanılır və status real vaxtda yenilənir.</p>
+              <h4>Təmir və Təsdiq</h4>
+              <p>Təsdiqinizdən sonra cihazınız <strong>ya ünvanda yerindəcə, ya da servis mərkəzimizə gətirilərək</strong> peşəkar səviyyədə təmir olunur. <strong>Gördüyümüz bütün işlərə 100% zəmanət verilir.</strong></p>
             </div>
             <div class="step">
               <div class="num">04</div>
-              <h4>Təhvil</h4>
-              <p>Hazır olduqda müştəri məlumatları əldə edir.</p>
+              <h4>Təhvil və Ödəniş</h4>
+              <p>Təmir başa çatdıqdan sonra ödəniş həyata keçirilir və cihazınız sizə təhvil verilir. Heç bir yerə yorulmadan getmədən bütün texniki problemləriniz operativ şəkildə həll olunur.</p>
             </div>
           </div>
         </div>
       </section>
     </main>
 
-    <footer>
+    <section class="section app-screen contact-screen" id="contact" data-screen="contact">
+      <div class="container contact-panel">
+        <div class="contact-intro">
+          <span class="eyebrow">Əlaqə</span>
+          <h2>Baku Servis komandası ilə əlaqə saxlayın</h2>
+          <p>Texniki sualınız və ya servis müraciətiniz üçün uyğun əlaqə kanalını seçin. Mütəxəssislərimiz sizə operativ şəkildə cavab verəcək.</p>
+        </div>
+        <div class="contact-options">
+          <a class="contact-option" href="tel:+994707164142">
+            <span class="contact-option-icon">☎</span>
+            <span><small>Birbaşa zəng</small><strong>+994 70 716 41 42</strong></span>
+            <span class="contact-option-arrow">→</span>
+          </a>
+          <a class="contact-option" href="https://wa.me/994707164142" target="_blank" rel="noopener">
+            <span class="contact-option-icon contact-option-icon-green">◌</span>
+            <span><small>Mesaj göndərin</small><strong>WhatsApp dəstəyi</strong></span>
+            <span class="contact-option-arrow">→</span>
+          </a>
+        </div>
+        <div class="contact-meta">
+          <span><i></i> Cavab müddəti: 15 dəqiqə</span>
+          <span><i></i> Hər gün 09:00–20:00</span>
+        </div>
+      </div>
+    </section>
+
+    <footer class="app-screen" data-screen="contact">
       <div class="container footer-grid">
         <div>
           <div class="brand">
@@ -575,8 +621,18 @@
       </a>
     </div>
 
+    <nav class="bottom-navigation" id="bottom-navigation" aria-label="Mobil naviqasiya">
+      <a href="#home" data-screen-link="home"><span>⌂</span><small>Ana səhifə</small></a>
+      <a href="#services" data-screen-link="services"><span>▦</span><small>Xidmətlər</small></a>
+      <a href="#request-panel" data-screen-link="request"><span>＋</span><small>Müraciət</small></a>
+      <a href="#track" data-screen-link="tracking"><span>⌁</span><small>İzləmə</small></a>
+      <a href="#contact" data-screen-link="contact"><span>◉</span><small>Əlaqə</small></a>
+    </nav>
+
     <div id="toast-container" aria-live="polite"></div>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/app-shell.js"></script>
     <script src="js/main.js"></script>
   </body>
 </html>
