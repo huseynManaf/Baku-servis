@@ -301,7 +301,6 @@
     serviceCards.innerHTML = services.map((service) => `
       <article class="svc-card">
         <div class="svc-tag">${getServiceBadge(service)}</div>
-        <div class="svc-cat">${service.category || 'Genel'}</div>
         <h3>${service.name}</h3>
         <p>Peşəkar texniki yardım, dəqiq qiymətləndirmə və sürətli status izləmə.</p>
         <div class="svc-price-row">
