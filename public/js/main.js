@@ -1,5 +1,7 @@
 ﻿document.addEventListener('DOMContentLoaded', () => {
   const serviceSelect = document.getElementById('service_name');
+  const servicePickerTrigger = document.getElementById('service-picker-trigger');
+  const servicePickerOptions = document.getElementById('service-picker-options');
   const serviceCards = document.getElementById('service-cards');
   const requestForm = document.getElementById('request-form');
   const trackForm = document.getElementById('track-form');
@@ -34,11 +36,17 @@
   const payNowBtn = document.getElementById('pay-now-btn');
   const payLaterBtn = document.getElementById('pay-later-btn');
   const liveBoard = document.getElementById('live-board');
+  const myRequestsList = document.getElementById('my-requests-list');
   const requestSubmitButton = requestForm?.querySelector('button[type="submit"]');
   let activeTrackingId = null;
   let requestSubmitting = false;
   let cachedTrackingRequest = null;
   const AZERBAIJANI_PHONE_REGEX = /^(\+994|994|0)?(50|51|55|60|70|77|99)\d{7}$/;
+
+  customerPhoneInput?.addEventListener('change', () => {
+    const phone = sanitizePhone(customerPhoneInput.value);
+    if (phone) setStoredCustomerIdentity('', normalizePhone(phone));
+  });
 
   paymentChoiceInputs.forEach((input) => {
     input.addEventListener('change', () => {
@@ -136,6 +144,43 @@
     };
     localStorage.setItem('bakuservis-customer-identity', JSON.stringify(next));
     return next;
+  }
+
+  function renderMyRequests(requests, offline = false) {
+    if (!myRequestsList) return;
+    if (!requests.length) {
+      myRequestsList.innerHTML = '<div class="my-requests-empty">Bu telefon nömrəsi ilə əlaqəli müraciət tapılmadı.</div>';
+      return;
+    }
+    myRequestsList.innerHTML = requests.map((request) => `
+      <article class="my-request-card">
+        <div class="my-request-main">
+          <strong>${request.service_name || 'Xidmət'}${offline ? ' · offline' : ''}</strong>
+          <small>${request.tracking_code || '-'} · ${request.device_info || 'Cihaz məlumatı yoxdur'} · ${formatDate(request.created_at)}</small>
+        </div>
+        <span class="status-chip my-request-status ${statusClass(request.status)}">${request.status || 'Gözləmədə'}</span>
+      </article>
+    `).join('');
+  }
+
+  async function loadMyRequests() {
+    if (!myRequestsList) return;
+    const identity = getStoredCustomerIdentity();
+    if (!identity.phone) {
+      myRequestsList.innerHTML = '<div class="my-requests-empty">Müraciətlərinizi görmək üçün əvvəlcə telefon nömrənizi daxil edin.</div>';
+      return;
+    }
+    try {
+      const response = await fetch(`/api/requests/by-phone/${encodeURIComponent(identity.phone)}`);
+      if (!response.ok) throw new Error(`My requests request failed: ${response.status}`);
+      const body = await response.json();
+      const requests = Array.isArray(body.requests) ? body.requests : [];
+      localStorage.setItem('bakuservis-my-requests', JSON.stringify(requests));
+      renderMyRequests(requests);
+    } catch (error) {
+      const cached = JSON.parse(localStorage.getItem('bakuservis-my-requests') || '[]');
+      renderMyRequests(Array.isArray(cached) ? cached : [], true);
+    }
   }
 
   function isWithinAzerbaijan(lat, lng) {
@@ -291,10 +336,25 @@
 
   function populateServices(services) {
     if (!serviceSelect) return;
-    serviceSelect.innerHTML = '<option value="">Seçin</option>' + (services || []).map((service) => (
-      `<option value="${service.name}">${service.name}${Number(service.price || 0) > 0 ? ` — ${Number(service.price).toFixed(2)} ₼` : ''}</option>`
-    )).join('');
+    const list = Array.isArray(services) ? services : [];
+    serviceSelect.innerHTML = '<option value="">Seçin</option>' + list.map((service) => `<option value="${service.name}">${service.name}</option>`).join('');
+    if (servicePickerOptions) {
+      servicePickerOptions.innerHTML = list.map((service) => `<button type="button" class="service-picker-option" role="option" data-service-value="${service.name}"><span>${service.name}</span><strong>${Number(service.price || 0).toFixed(2)} ₼</strong></button>`).join('');
+      servicePickerOptions.querySelectorAll('[data-service-value]').forEach((option) => option.addEventListener('click', () => {
+        serviceSelect.value = option.dataset.serviceValue || '';
+        if (servicePickerTrigger) {
+          servicePickerTrigger.textContent = option.querySelector('span')?.textContent || 'Xidmət seçin';
+          servicePickerTrigger.setAttribute('aria-expanded', 'false');
+        }
+        servicePickerOptions.classList.remove('is-open');
+      }));
+    }
   }
+
+  servicePickerTrigger?.addEventListener('click', () => {
+    const open = servicePickerOptions?.classList.toggle('is-open');
+    servicePickerTrigger.setAttribute('aria-expanded', String(Boolean(open)));
+  });
 
   function getServiceBadge(service) {
     const value = String(service?.category || service?.name || 'SERVICE').toUpperCase();
@@ -328,6 +388,7 @@
 
         if (serviceSelect) {
           serviceSelect.value = name;
+          if (servicePickerTrigger) servicePickerTrigger.textContent = name;
         }
 
         if (orderSection) {
@@ -856,6 +917,12 @@
       }
     }
   });
+
+  window.addEventListener('bakuservis:screen', (event) => {
+    if (event.detail === 'my-requests') loadMyRequests();
+  });
+
+  if (myRequestsList) loadMyRequests();
 
   window.addEventListener('bakuservis:status', (event) => {
     const request = event.detail;

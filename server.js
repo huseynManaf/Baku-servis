@@ -1046,6 +1046,29 @@ app.get('/api/requests/track/:code', async (req, res) => {
   }
 });
 
+app.get('/api/requests/by-phone/:phone', async (req, res) => {
+  try {
+    const phoneDigits = normalizePhone(String(req.params.phone || ''));
+    const phoneCandidates = Array.from(new Set([
+      phoneDigits,
+      phoneDigits ? `0${phoneDigits}` : '',
+      phoneDigits ? `994${phoneDigits}` : ''
+    ].filter(Boolean)));
+    if (!phoneCandidates.length) return res.status(400).json({ error: 'Telefon nömrəsi tələb olunur.' });
+
+    const rows = await all(`SELECT id, tracking_code, service_name, device_info, status, quoted_price, final_price, payment_method, payment_status, is_onsite, address, created_at, updated_at FROM requests WHERE customer_phone IN (${phoneCandidates.map(() => '?').join(', ')}) ORDER BY created_at DESC`, phoneCandidates);
+    return res.json({ requests: rows.map((row) => ({
+      ...row,
+      quoted_price: Number(row.quoted_price || 0),
+      final_price: Number(row.final_price || 0),
+      is_onsite: Boolean(row.is_onsite)
+    })) });
+  } catch (error) {
+    console.error('GET /api/requests/by-phone error:', error);
+    return res.status(500).json({ error: 'Müraciət tarixçəsi yüklənə bilmədi.' });
+  }
+});
+
 app.get('/api/admin/requests', requireAdmin, async (req, res) => {
   try {
     const rows = await all('SELECT * FROM requests ORDER BY created_at DESC');

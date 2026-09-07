@@ -1,7 +1,10 @@
 (() => {
   const body = document.body;
   const isNativeApp = Boolean(window.Capacitor?.isNativePlatform?.() || window.Capacitor?.getPlatform?.() === 'android' || /BakuServisApp|; wv\)|Capacitor/i.test(navigator.userAgent));
-  if (isNativeApp) body.classList.add('native-app');
+  if (isNativeApp) {
+    body.classList.add('native-app');
+    localStorage.setItem('bakuservis-theme', 'dark');
+  }
   const drawer = document.getElementById('navigation-drawer');
   const backdrop = document.getElementById('drawer-backdrop');
   const drawerTrigger = document.getElementById('drawer-trigger');
@@ -23,6 +26,7 @@
     screens.forEach((item) => item.dataset.screenActive = item.dataset.screen === screen ? 'true' : 'false');
     links.forEach((link) => link.classList.toggle('is-active', link.dataset.screenLink === screen));
     localStorage.setItem('bakuservis-screen', screen);
+    window.dispatchEvent(new CustomEvent('bakuservis:screen', { detail: screen }));
     closeDrawer();
     const target = document.querySelector(`[data-screen="${screen}"]`);
     target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
