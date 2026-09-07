@@ -6,6 +6,7 @@
   "server": {
     "url": "https://bakuservis.az",
     "hostname": "bakuservis.az",
+    "androidScheme": "https",
     "cleartext": false
   }
 }
