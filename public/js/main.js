@@ -177,12 +177,7 @@
     if (!myRequestsList) return;
     const identity = getStoredCustomerIdentity();
     if (!identity.phone) {
-      const cached = JSON.parse(localStorage.getItem('bakuservis-my-requests') || '[]');
-      if (Array.isArray(cached) && cached.length) {
-        renderMyRequests(cached, true);
-      } else {
-        myRequestsList.innerHTML = '<div class="my-requests-empty">Müraciətlərinizi görmək üçün əvvəlcə telefon nömrənizi daxil edin.</div>';
-      }
+      myRequestsList.innerHTML = '<div class="my-requests-empty">Müraciətlərinizi görmək üçün əvvəlcə telefon nömrənizi daxil edin.</div>';
       return;
     }
     try {
