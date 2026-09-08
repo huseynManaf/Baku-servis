@@ -460,7 +460,10 @@
         <form id="track-form" class="unified-tracking-form" novalidate>
           <label for="unified-tracking-input">İzləmə kodu və ya telefon nömrəsi</label>
           <div class="unified-tracking-row">
-            <input id="tracking_code" type="text" placeholder="HG-ABCD12 və ya 050 123 45 67" autocomplete="off" />
+            <div class="tracking-input-wrap">
+              <span class="tracking-input-icon" aria-hidden="true">⌕</span>
+              <input id="tracking_code" type="text" placeholder="HG-ABCD12 və ya 050 123 45 67" autocomplete="off" />
+            </div>
             <button type="submit" class="btn btn-primary">Axtar</button>
           </div>
           <small id="unified-tracking-message" class="field-hint"></small>
