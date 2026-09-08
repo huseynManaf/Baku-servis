@@ -44,6 +44,28 @@ const ADMIN_USERNAME = process.env.DEFAULT_ADMIN_USER || process.env.ADMIN_USER 
 const ADMIN_PASSWORD = process.env.DEFAULT_ADMIN_PASS || process.env.ADMIN_PASS || 'Baku2019';
 const SUPER_ADMIN_ROLE = 'SUPER_ADMIN';
 const ADMIN_ROLE = 'ADMIN';
+const REQUEST_STATUSES = [
+  'Sifariş qəbul edildi',
+  'Diaqnostikadadır',
+  'Təsdiq gözlənilir',
+  'Təmir prosesindədir',
+  'Təhvilə hazırdır',
+  'Uğurla tamamlandı',
+  'İmtina edildi'
+];
+const REQUEST_STATUS_ALIASES = new Map([
+  ['Gözləmədə', 'Sifariş qəbul edildi'],
+  ['Baxılır', 'Diaqnostikadadır'],
+  ['Qiymətləndirildi', 'Təsdiq gözlənilir'],
+  ['İcrada', 'Təmir prosesindədir'],
+  ['Hazırdır', 'Təhvilə hazırdır'],
+  ['Təhvil verilib', 'Uğurla tamamlandı']
+]);
+
+function normalizeRequestStatus(value) {
+  const status = String(value || '').trim();
+  return REQUEST_STATUS_ALIASES.get(status) || (REQUEST_STATUSES.includes(status) ? status : 'Sifariş qəbul edildi');
+}
 const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
 const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
 const SMTP_SECURE = String(process.env.SMTP_SECURE || 'false').toLowerCase() === 'true';
@@ -514,9 +536,14 @@ async function ensurePostgresDatabase() {
   await run(`CREATE TABLE IF NOT EXISTS services (id SERIAL PRIMARY KEY, name TEXT NOT NULL UNIQUE, category TEXT NOT NULL DEFAULT 'Genel', price NUMERIC(12, 2) DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
   await run('ALTER TABLE services ADD COLUMN IF NOT EXISTS price NUMERIC(12, 2) DEFAULT 0');
 
-  const requestSchema = `id SERIAL PRIMARY KEY, tracking_code TEXT UNIQUE NOT NULL, customer_name TEXT NOT NULL, customer_phone TEXT NOT NULL, service_name TEXT NOT NULL, device_model TEXT, device_info TEXT, status TEXT NOT NULL DEFAULT 'Gözləmədə', quoted_price NUMERIC(12, 2) DEFAULT 0, final_price NUMERIC(12, 2) DEFAULT 0, is_onsite INTEGER NOT NULL DEFAULT 0, address TEXT, latitude DOUBLE PRECISION, longitude DOUBLE PRECISION, payment_method TEXT NOT NULL DEFAULT 'later', payment_status TEXT NOT NULL DEFAULT 'Ödənilməyib', idempotency_key TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP`;
+  const requestSchema = `id SERIAL PRIMARY KEY, tracking_code TEXT UNIQUE NOT NULL, customer_name TEXT NOT NULL, customer_phone TEXT NOT NULL, service_name TEXT NOT NULL, device_model TEXT, device_info TEXT, status TEXT NOT NULL DEFAULT 'Sifariş qəbul edildi', quoted_price NUMERIC(12, 2) DEFAULT 0, final_price NUMERIC(12, 2) DEFAULT 0, is_onsite INTEGER NOT NULL DEFAULT 0, address TEXT, latitude DOUBLE PRECISION, longitude DOUBLE PRECISION, payment_method TEXT NOT NULL DEFAULT 'later', payment_status TEXT NOT NULL DEFAULT 'Ödənilməyib', idempotency_key TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP`;
   await run(`CREATE TABLE IF NOT EXISTS requests (${requestSchema})`);
   await run(`CREATE TABLE IF NOT EXISTS orders (${requestSchema})`);
+  for (const table of ['requests', 'orders']) {
+    for (const [legacyStatus, currentStatus] of REQUEST_STATUS_ALIASES) {
+      await run(`UPDATE ${table} SET status = ? WHERE status = ?`, [currentStatus, legacyStatus]);
+    }
+  }
   await run(`CREATE TABLE IF NOT EXISTS chat_messages (id SERIAL PRIMARY KEY, session_id TEXT NOT NULL, sender_type TEXT NOT NULL CHECK(sender_type IN ('customer', 'admin', 'bot')), message TEXT NOT NULL, customer_name TEXT, customer_phone TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
   await run(`CREATE TABLE IF NOT EXISTS push_subscriptions (id SERIAL PRIMARY KEY, tracking_code TEXT NOT NULL, endpoint TEXT UNIQUE NOT NULL, subscription JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
   await run('ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS customer_name TEXT');
@@ -845,7 +872,7 @@ app.get('/api/orders/live-board', async (req, res) => {
         id: row.id,
         service_name: row.service_name || 'Xidmət',
         device_model: row.device_model || 'Model bilinmir',
-        status: row.status || 'Gözləmədə',
+        status: normalizeRequestStatus(row.status),
         created_at: row.created_at
       }))
     });
@@ -920,7 +947,7 @@ app.post('/api/requests', async (req, res) => {
       service_name,
       device_model || device_info || null,
       device_info || null,
-      'Gözləmədə',
+      'Sifariş qəbul edildi',
       0,
       0,
       is_onsite ? 1 : 0,
@@ -952,7 +979,7 @@ app.post('/api/requests', async (req, res) => {
         customer_name,
         service_name,
         customer_phone,
-        status: 'Gözləmədə',
+        status: 'Sifariş qəbul edildi',
         tracking_code
       }
     });
@@ -984,7 +1011,7 @@ app.post('/api/requests', async (req, res) => {
       payment_method: normalizedPaymentMethod,
       payment_status: paymentStatus,
       created_at: formatDate(timestamp),
-      status: 'Gözləmədə'
+      status: 'Sifariş qəbul edildi'
     });
   } catch (error) {
     console.error('POST /api/requests error:', error);
@@ -1025,7 +1052,7 @@ app.get('/api/requests/track/:code', async (req, res) => {
         customer_phone: row.customer_phone,
         service_name: row.service_name,
         device_info: row.device_info,
-        status: row.status,
+        status: normalizeRequestStatus(row.status),
         quoted_price: Number(row.quoted_price || 0),
         final_price: Number(row.final_price || 0),
         payment_method: row.payment_method || 'later',
@@ -1059,6 +1086,7 @@ app.get('/api/requests/by-phone/:phone', async (req, res) => {
     const rows = await all(`SELECT id, tracking_code, service_name, device_info, status, quoted_price, final_price, payment_method, payment_status, is_onsite, address, created_at, updated_at FROM requests WHERE customer_phone IN (${phoneCandidates.map(() => '?').join(', ')}) ORDER BY created_at DESC`, phoneCandidates);
     return res.json({ requests: rows.map((row) => ({
       ...row,
+      status: normalizeRequestStatus(row.status),
       quoted_price: Number(row.quoted_price || 0),
       final_price: Number(row.final_price || 0),
       is_onsite: Boolean(row.is_onsite)
@@ -1074,6 +1102,7 @@ app.get('/api/admin/requests', requireAdmin, async (req, res) => {
     const rows = await all('SELECT * FROM requests ORDER BY created_at DESC');
     return res.json(rows.map((row) => ({
       ...row,
+      status: normalizeRequestStatus(row.status),
       quoted_price: Number(row.quoted_price || 0),
       final_price: Number(row.final_price || 0),
       payment_method: row.payment_method || 'later',
@@ -1094,7 +1123,7 @@ app.get('/api/admin/requests/:id', requireAdmin, async (req, res) => {
     if (!row) {
       return res.status(404).json({ error: 'Müraciət tapılmadı.' });
     }
-    return res.json({ request: row });
+    return res.json({ request: { ...row, status: normalizeRequestStatus(row.status) } });
   } catch (error) {
     console.error('GET /api/admin/requests/:id error:', error);
     return res.status(500).json({ error: 'Müraciət detalları yüklənə bilmədi.' });
@@ -1104,7 +1133,7 @@ app.get('/api/admin/requests/:id', requireAdmin, async (req, res) => {
 app.put('/api/admin/requests/:id', requireAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const status = String(req.body.status || 'Gözləmədə').trim();
+    const status = normalizeRequestStatus(req.body.status);
     const quoted_price = Number(req.body.quoted_price || 0);
     const final_price = Number(req.body.final_price || 0);
     const payment_status = String(req.body.payment_status || 'Ödənilməyib').trim();
@@ -1144,7 +1173,7 @@ app.post('/api/requests/:id/pay', async (req, res) => {
     }
 
     const paymentStatus = 'Ödənilib';
-    const nextStatus = row.status === 'Gözləmədə' || row.status === 'Qiymətləndirildi' ? 'Hazırdır' : row.status || 'Hazırdır';
+    const nextStatus = normalizeRequestStatus(row.status);
 
     await run(`
       UPDATE requests
@@ -1168,7 +1197,7 @@ app.post('/api/requests/:id/confirm-cash', async (req, res) => {
     }
 
     const paymentStatus = 'Təhvil veriləndə ödənəcək';
-    const nextStatus = 'Təhvil veriləndə ödənəcək';
+    const nextStatus = normalizeRequestStatus(row.status);
 
     await run(`
       UPDATE requests

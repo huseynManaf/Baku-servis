@@ -28,15 +28,39 @@ document.addEventListener('DOMContentLoaded', () => {
   let selectedRequestId = null;
   let currentChatSession = null;
   let currentUserRole = 'ADMIN';
+  const REQUEST_STATUSES = [
+    'Sifariş qəbul edildi',
+    'Diaqnostikadadır',
+    'Təsdiq gözlənilir',
+    'Təmir prosesindədir',
+    'Təhvilə hazırdır',
+    'Uğurla tamamlandı',
+    'İmtina edildi'
+  ];
 
   function statusClass(status) {
     const value = String(status || '').toLowerCase();
-    if (value.includes('gözləm') || value.includes('pending')) return 'status-yeni';
-    if (value.includes('qiym') || value.includes('quote')) return 'status-qiymetlendirildi';
-    if (value.includes('hazır')) return 'status-hazir';
-    if (value.includes('icra')) return 'status-icrada';
-    if (value.includes('təhvil') || value.includes('teslim')) return 'status-teslim';
-    return 'status-baxilir';
+    if (value.includes('imtina')) return 'status-rejected';
+    if (value.includes('tamam')) return 'status-complete';
+    if (value.includes('hazır')) return 'status-ready';
+    if (value.includes('təmir')) return 'status-in-progress';
+    if (value.includes('təsdiq')) return 'status-awaiting';
+    if (value.includes('diaqnostik')) return 'status-diagnostic';
+    return 'status-received';
+  }
+
+  function renderStatusTimeline(status) {
+    const timeline = document.getElementById('admin-status-timeline');
+    if (!timeline) return;
+    const currentStatus = String(status || REQUEST_STATUSES[0]);
+    const currentIndex = REQUEST_STATUSES.indexOf(currentStatus);
+    const rejected = currentStatus === 'İmtina edildi';
+    timeline.innerHTML = REQUEST_STATUSES.map((label, index) => {
+      const isRejected = label === 'İmtina edildi';
+      const complete = currentIndex >= index && !isRejected;
+      const active = label === currentStatus;
+      return `<div class="status-step ${complete ? 'is-complete' : ''} ${active ? 'is-active' : ''} ${isRejected && rejected ? 'is-rejected' : ''}"><span class="status-step-dot">${isRejected ? '×' : complete ? '✓' : index + 1}</span><span class="status-step-label">${label}</span></div>`;
+    }).join('');
   }
 
   function formatDateTime(value) {
@@ -67,9 +91,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateStats(requests) {
     if (!Array.isArray(requests)) return;
     const count = requests.length;
-    const pending = requests.filter((request) => String(request.status || '').includes('Gözləmədə')).length;
-    const inwork = requests.filter((request) => String(request.status || '').includes('İcrada')).length;
-    const ready = requests.filter((request) => String(request.status || '').includes('Hazırdır')).length;
+    const pending = requests.filter((request) => ['Sifariş qəbul edildi', 'Diaqnostikadadır', 'Təsdiq gözlənilir'].includes(request.status)).length;
+    const inwork = requests.filter((request) => request.status === 'Təmir prosesindədir').length;
+    const ready = requests.filter((request) => request.status === 'Təhvilə hazırdır').length;
 
     if (statTotal) statTotal.textContent = String(count);
     if (statPending) statPending.textContent = String(pending);
@@ -225,7 +249,8 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('detail-device').value = request.device_info || '-';
       document.getElementById('detail-service').value = request.service_name || '-';
       document.getElementById('detail-created').value = formatDateTime(request.created_at);
-      document.getElementById('detail-status').value = request.status || 'Gözləmədə';
+      document.getElementById('detail-status').value = request.status || 'Sifariş qəbul edildi';
+      renderStatusTimeline(request.status);
       document.getElementById('detail-quoted').value = Number(request.quoted_price || 0);
       document.getElementById('detail-final').value = Number(request.final_price || 0);
       document.getElementById('detail-payment-status').value = request.payment_status || 'Ödənilməyib';
@@ -253,6 +278,10 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error('openRequestDetail error:', error);
     }
   }
+
+  document.getElementById('detail-status')?.addEventListener('change', (event) => {
+    renderStatusTimeline(event.target.value);
+  });
 
   document.getElementById('save-request-btn')?.addEventListener('click', async () => {
     if (!selectedRequestId) return;

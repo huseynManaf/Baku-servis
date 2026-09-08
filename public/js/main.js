@@ -39,11 +39,23 @@
   const unifiedTrackingForm = document.getElementById('track-form');
   const unifiedTrackingInput = document.getElementById('tracking_code');
   const unifiedTrackingMessage = document.getElementById('unified-tracking-message');
+  const statusTimeline = document.getElementById('request-status-timeline');
+  const orderSupportLink = document.getElementById('order-support-link');
   const requestSubmitButton = requestForm?.querySelector('button[type="submit"]');
   let activeTrackingId = null;
   let requestSubmitting = false;
   let cachedTrackingRequest = null;
   const AZERBAIJANI_PHONE_REGEX = /^(\+994|994|0)?(50|51|55|60|70|77|99)\d{7}$/;
+  const WHATSAPP_NUMBER = '994707164142';
+  const REQUEST_STATUSES = [
+    'Sifariş qəbul edildi',
+    'Diaqnostikadadır',
+    'Təsdiq gözlənilir',
+    'Təmir prosesindədir',
+    'Təhvilə hazırdır',
+    'Uğurla tamamlandı',
+    'İmtina edildi'
+  ];
 
   customerPhoneInput?.addEventListener('change', () => {
     const phone = sanitizePhone(customerPhoneInput.value);
@@ -85,12 +97,38 @@
 
   function statusClass(status) {
     const value = String(status || '').toLowerCase();
-    if (value.includes('gözləm') || value.includes('pending')) return 'status-yeni';
-    if (value.includes('qiym') || value.includes('quote')) return 'status-qiymetlendirildi';
-    if (value.includes('hazır')) return 'status-hazir';
-    if (value.includes('icra')) return 'status-icrada';
-    if (value.includes('təhvil') || value.includes('teslim')) return 'status-teslim';
-    return 'status-baxilir';
+    if (value.includes('imtina')) return 'status-rejected';
+    if (value.includes('tamam')) return 'status-complete';
+    if (value.includes('hazır')) return 'status-ready';
+    if (value.includes('təmir')) return 'status-in-progress';
+    if (value.includes('təsdiq')) return 'status-awaiting';
+    if (value.includes('diaqnostik')) return 'status-diagnostic';
+    return 'status-received';
+  }
+
+  function renderStatusTimeline(status) {
+    if (!statusTimeline) return;
+    const currentStatus = String(status || 'Sifariş qəbul edildi');
+    const currentIndex = REQUEST_STATUSES.indexOf(currentStatus);
+    const rejected = currentStatus === 'İmtina edildi';
+    statusTimeline.innerHTML = REQUEST_STATUSES.map((label, index) => {
+      const isRejected = label === 'İmtina edildi';
+      const complete = currentIndex >= index && !isRejected;
+      const active = label === currentStatus;
+      return `<div class="status-step ${complete ? 'is-complete' : ''} ${active ? 'is-active' : ''} ${isRejected && rejected ? 'is-rejected' : ''}"><span class="status-step-dot">${isRejected ? '×' : complete ? '✓' : index + 1}</span><span class="status-step-label">${label}</span></div>`;
+    }).join('');
+  }
+
+  function updateOrderSupportLink(request) {
+    if (!orderSupportLink) return;
+    if (!request?.tracking_code) {
+      orderSupportLink.style.display = 'none';
+      return;
+    }
+    const device = request.device_info || 'cihazım';
+    const message = `Salam, ${request.tracking_code} kodlu müraciətimlə bağlı sualım var. Cihaz: ${device}`;
+    orderSupportLink.href = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+    orderSupportLink.style.display = 'inline-flex';
   }
 
   function sanitizePhone(value) {
@@ -160,7 +198,7 @@
           <strong>${request.service_name || 'Xidmət'}${offline ? ' · offline' : ''}</strong>
           <small>${request.tracking_code || '-'} · ${request.device_info || 'Cihaz məlumatı yoxdur'} · ${formatDate(request.created_at)}</small>
         </div>
-        <span class="status-chip my-request-status ${statusClass(request.status)}">${request.status || 'Gözləmədə'}</span>
+        <span class="status-chip my-request-status ${statusClass(request.status)}">${request.status || 'Sifariş qəbul edildi'}</span>
         <span class="my-request-arrow" aria-hidden="true">→</span>
       </article>
     `).join('');
@@ -849,8 +887,10 @@
       }
       resultService.textContent = request.service_name || '-';
       resultDevice.textContent = request.device_info || 'Cihaz məlumatı yoxdur';
-      resultStatus.textContent = request.status || 'Gözləmədə';
+      resultStatus.textContent = request.status || 'Sifariş qəbul edildi';
       resultStatus.className = `status-chip ${statusClass(request.status)}`;
+      renderStatusTimeline(request.status);
+      updateOrderSupportLink(request);
       resultCreated.textContent = formatDate(request.created_at);
       resultUpdated.textContent = formatDate(request.updated_at);
       resultQuoted.textContent = `${Number(request.quoted_price || 0).toFixed(2)} ₼`;
@@ -881,8 +921,10 @@
         activeTrackingId = cached.id || null;
         resultService.textContent = cached.service_name || '-';
         resultDevice.textContent = cached.device_info || 'Cihaz məlumatı yoxdur';
-        resultStatus.textContent = `${cached.status || 'Gözləmədə'} (offline)`;
+        resultStatus.textContent = `${cached.status || 'Sifariş qəbul edildi'} (offline)`;
         resultStatus.className = `status-chip ${statusClass(cached.status)}`;
+        renderStatusTimeline(cached.status);
+        updateOrderSupportLink(cached);
         resultCreated.textContent = formatDate(cached.created_at);
         resultUpdated.textContent = formatDate(cached.updated_at);
         trackingResult.style.display = 'block';
@@ -908,9 +950,11 @@
     cachedTrackingRequest = { ...cachedTrackingRequest, ...request };
     localStorage.setItem('bakuservis-last-tracking', JSON.stringify(cachedTrackingRequest));
     if (resultStatus) {
-      resultStatus.textContent = request.status || 'Gözləmədə';
+      resultStatus.textContent = request.status || 'Sifariş qəbul edildi';
       resultStatus.className = `status-chip ${statusClass(request.status)}`;
     }
+    renderStatusTimeline(request.status);
+    updateOrderSupportLink(request);
     if (resultUpdated) resultUpdated.textContent = formatDate(request.updated_at);
   });
 
