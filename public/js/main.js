@@ -575,10 +575,18 @@
     if (!postSubmitChoice) return;
 
     const normalizedPaymentMethod = String(request?.payment_method || '').toLowerCase();
+    const normalizedPaymentStatus = String(request?.payment_status || '').toLowerCase();
+    const cashPaymentConfirmed = normalizedPaymentMethod === 'cash'
+      || normalizedPaymentStatus.includes('təhvil')
+      || normalizedPaymentStatus.includes('tehvil');
 
-    if (!request || (request.payment_status || 'Ödənilməyib') === 'Ödənilib') {
+    if (!request || (request.payment_status || 'Ödənilməyib') === 'Ödənilib' || cashPaymentConfirmed) {
       postSubmitChoice.style.display = 'none';
-      setPaymentConfirmation(false);
+      if (cashPaymentConfirmed && (request.payment_status || '').toLowerCase().includes('təhvil')) {
+        setPaymentConfirmation(true, '✅ Ödəniş üsulu təsdiqləndi: Təhvil veriləndə ödəniləcək');
+      } else {
+        setPaymentConfirmation(false);
+      }
       return;
     }
 
