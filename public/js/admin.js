@@ -247,6 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('detail-name').value = request.customer_name;
       document.getElementById('detail-phone').value = request.customer_phone;
       document.getElementById('detail-device').value = request.device_info || '-';
+      document.getElementById('detail-problem-description').value = request.problem_description || 'Əlavə qeyd yoxdur.';
       document.getElementById('detail-service').value = request.service_name || '-';
       document.getElementById('detail-created').value = formatDateTime(request.created_at);
       document.getElementById('detail-status').value = request.status || 'Sifariş qəbul edildi';

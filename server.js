@@ -536,9 +536,11 @@ async function ensurePostgresDatabase() {
   await run(`CREATE TABLE IF NOT EXISTS services (id SERIAL PRIMARY KEY, name TEXT NOT NULL UNIQUE, category TEXT NOT NULL DEFAULT 'Genel', price NUMERIC(12, 2) DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
   await run('ALTER TABLE services ADD COLUMN IF NOT EXISTS price NUMERIC(12, 2) DEFAULT 0');
 
-  const requestSchema = `id SERIAL PRIMARY KEY, tracking_code TEXT UNIQUE NOT NULL, customer_name TEXT NOT NULL, customer_phone TEXT NOT NULL, service_name TEXT NOT NULL, device_model TEXT, device_info TEXT, status TEXT NOT NULL DEFAULT 'Sifariş qəbul edildi', quoted_price NUMERIC(12, 2) DEFAULT 0, final_price NUMERIC(12, 2) DEFAULT 0, is_onsite INTEGER NOT NULL DEFAULT 0, address TEXT, latitude DOUBLE PRECISION, longitude DOUBLE PRECISION, payment_method TEXT NOT NULL DEFAULT 'later', payment_status TEXT NOT NULL DEFAULT 'Ödənilməyib', idempotency_key TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP`;
+  const requestSchema = `id SERIAL PRIMARY KEY, tracking_code TEXT UNIQUE NOT NULL, customer_name TEXT NOT NULL, customer_phone TEXT NOT NULL, service_name TEXT NOT NULL, device_model TEXT, device_info TEXT, problem_description TEXT, status TEXT NOT NULL DEFAULT 'Sifariş qəbul edildi', quoted_price NUMERIC(12, 2) DEFAULT 0, final_price NUMERIC(12, 2) DEFAULT 0, is_onsite INTEGER NOT NULL DEFAULT 0, address TEXT, latitude DOUBLE PRECISION, longitude DOUBLE PRECISION, payment_method TEXT NOT NULL DEFAULT 'later', payment_status TEXT NOT NULL DEFAULT 'Ödənilməyib', idempotency_key TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP`;
   await run(`CREATE TABLE IF NOT EXISTS requests (${requestSchema})`);
   await run(`CREATE TABLE IF NOT EXISTS orders (${requestSchema})`);
+  await run('ALTER TABLE requests ADD COLUMN IF NOT EXISTS problem_description TEXT');
+  await run('ALTER TABLE orders ADD COLUMN IF NOT EXISTS problem_description TEXT');
   for (const table of ['requests', 'orders']) {
     for (const [legacyStatus, currentStatus] of REQUEST_STATUS_ALIASES) {
       await run(`UPDATE ${table} SET status = ? WHERE status = ?`, [currentStatus, legacyStatus]);
@@ -891,6 +893,7 @@ app.post('/api/requests', async (req, res) => {
     const idempotency_key = String(req.body.idempotency_key || '').trim().slice(0, 120);
     const device_info = String(req.body.device_info || '').trim();
     const device_model = String(req.body.device_model || device_info || '').trim();
+    const problem_description = String(req.body.problem_description || '').trim();
     const onsite_address = String(req.body.address || '').trim();
 
     if (!customer_name || !customer_phone || !service_name) {
@@ -947,6 +950,7 @@ app.post('/api/requests', async (req, res) => {
       service_name,
       device_model || device_info || null,
       device_info || null,
+      problem_description || null,
       'Sifariş qəbul edildi',
       0,
       0,
@@ -961,15 +965,15 @@ app.post('/api/requests', async (req, res) => {
       timestamp
     ];
 
-    const orderInsert = [...requestInsert.slice(0, 15), ...requestInsert.slice(16)];
+    const orderInsert = [...requestInsert.slice(0, 16), ...requestInsert.slice(17)];
     const result = await run(`
-      INSERT INTO requests (tracking_code, customer_name, customer_phone, service_name, device_model, device_info, status, quoted_price, final_price, is_onsite, address, latitude, longitude, payment_method, payment_status, idempotency_key, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO requests (tracking_code, customer_name, customer_phone, service_name, device_model, device_info, problem_description, status, quoted_price, final_price, is_onsite, address, latitude, longitude, payment_method, payment_status, idempotency_key, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, requestInsert);
 
     const orderResult = await run(`
-      INSERT INTO orders (tracking_code, customer_name, customer_phone, service_name, device_model, device_info, status, quoted_price, final_price, is_onsite, address, latitude, longitude, payment_method, payment_status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO orders (tracking_code, customer_name, customer_phone, service_name, device_model, device_info, problem_description, status, quoted_price, final_price, is_onsite, address, latitude, longitude, payment_method, payment_status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, orderInsert);
 
     emitAdminNotification({
@@ -992,6 +996,7 @@ app.post('/api/requests', async (req, res) => {
         'Telefon': customer_phone,
         'Xidmət': service_name,
         'Cihaz': device_info || '-',
+        'Problem / Qeyd': problem_description || '-',
         'Ünvan / Yerləşmə': onsite_address || address || 'Servisdə',
         'Səyyar xidmət': is_onsite ? 'Bəli' : 'Xeyr',
         'Ödəniş üsulu': normalizedPaymentMethod,
@@ -1001,7 +1006,7 @@ app.post('/api/requests', async (req, res) => {
       console.error('❌ Email error:', emailError);
     });
 
-    void sendTelegramNotification(`🔔 Yeni müraciət\n\n👤 ${customer_name}\n📞 ${customer_phone}\n🛠️ ${service_name}\n💻 ${device_info || '-'}\n🔑 ${tracking_code}`);
+    void sendTelegramNotification(`🔔 Yeni müraciət\n\n👤 ${customer_name}\n📞 ${customer_phone}\n🛠️ ${service_name}\n💻 ${device_info || '-'}\n📝 ${problem_description || '-'}\n🔑 ${tracking_code}`);
 
     return res.status(200).json({
       ok: true,
@@ -1052,6 +1057,7 @@ app.get('/api/requests/track/:code', async (req, res) => {
         customer_phone: row.customer_phone,
         service_name: row.service_name,
         device_info: row.device_info,
+        problem_description: row.problem_description || '',
         status: normalizeRequestStatus(row.status),
         quoted_price: Number(row.quoted_price || 0),
         final_price: Number(row.final_price || 0),
@@ -1083,7 +1089,7 @@ app.get('/api/requests/by-phone/:phone', async (req, res) => {
     ].filter(Boolean)));
     if (!phoneCandidates.length) return res.status(400).json({ error: 'Telefon nömrəsi tələb olunur.' });
 
-    const rows = await all(`SELECT id, tracking_code, service_name, device_info, status, quoted_price, final_price, payment_method, payment_status, is_onsite, address, created_at, updated_at FROM requests WHERE customer_phone IN (${phoneCandidates.map(() => '?').join(', ')}) ORDER BY created_at DESC`, phoneCandidates);
+    const rows = await all(`SELECT id, tracking_code, service_name, device_info, problem_description, status, quoted_price, final_price, payment_method, payment_status, is_onsite, address, created_at, updated_at FROM requests WHERE customer_phone IN (${phoneCandidates.map(() => '?').join(', ')}) ORDER BY created_at DESC`, phoneCandidates);
     return res.json({ requests: rows.map((row) => ({
       ...row,
       status: normalizeRequestStatus(row.status),

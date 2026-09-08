@@ -9,6 +9,8 @@
   const trackingResult = document.getElementById('tracking-result');
   const resultService = document.getElementById('result-service');
   const resultDevice = document.getElementById('result-device');
+  const resultProblemDescriptionWrap = document.getElementById('result-problem-description-wrap');
+  const resultProblemDescription = document.getElementById('result-problem-description');
   const resultStatus = document.getElementById('result-status');
   const resultCreated = document.getElementById('result-created');
   const resultUpdated = document.getElementById('result-updated');
@@ -785,6 +787,7 @@
         customer_phone: customerPhone,
         service_name: serviceSelect ? serviceSelect.value : '',
         device_info: document.getElementById('device_info').value.trim(),
+        problem_description: document.getElementById('problem_description').value.trim(),
         is_onsite: isOnsite,
         payment_method: paymentMethodSelect ? paymentMethodSelect.value : 'later',
         address: onsiteAddressInput ? onsiteAddressInput.value.trim() : '',
@@ -887,6 +890,11 @@
       }
       resultService.textContent = request.service_name || '-';
       resultDevice.textContent = request.device_info || 'Cihaz məlumatı yoxdur';
+      if (resultProblemDescription && resultProblemDescriptionWrap) {
+        const description = String(request.problem_description || '').trim();
+        resultProblemDescription.textContent = description || 'Əlavə qeyd yoxdur.';
+        resultProblemDescriptionWrap.style.display = 'block';
+      }
       resultStatus.textContent = request.status || 'Sifariş qəbul edildi';
       resultStatus.className = `status-chip ${statusClass(request.status)}`;
       renderStatusTimeline(request.status);
@@ -921,6 +929,11 @@
         activeTrackingId = cached.id || null;
         resultService.textContent = cached.service_name || '-';
         resultDevice.textContent = cached.device_info || 'Cihaz məlumatı yoxdur';
+        if (resultProblemDescription && resultProblemDescriptionWrap) {
+          const description = String(cached.problem_description || '').trim();
+          resultProblemDescription.textContent = description || 'Əlavə qeyd yoxdur.';
+          resultProblemDescriptionWrap.style.display = 'block';
+        }
         resultStatus.textContent = `${cached.status || 'Sifariş qəbul edildi'} (offline)`;
         resultStatus.className = `status-chip ${statusClass(cached.status)}`;
         renderStatusTimeline(cached.status);

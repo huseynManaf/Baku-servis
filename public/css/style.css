@@ -462,6 +462,9 @@ body[data-theme="light"] .address-suggestion-item:focus-visible,body.theme-light
 .meta-label{font-size:11px;color:var(--text-low);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px;}
 .meta{font-size:13px;color:var(--text-mid);}
 .meta strong{font-weight:600;color:var(--text-hi);}
+.request-note{margin:0 0 16px;padding:14px 16px;border:1px solid rgba(82,208,200,.2);border-radius:12px;background:rgba(82,208,200,.06);}
+.request-note .meta-label{margin-bottom:6px;color:var(--teal-hi);}
+.request-note p{margin:0;color:var(--text-hi);font-size:13.5px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere;}
 .tracking-details{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px;}
 .tracking-details .meta{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;min-width:0;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(148,163,184,0.14);}
 .tracking-details .meta span{color:var(--text-low);}
