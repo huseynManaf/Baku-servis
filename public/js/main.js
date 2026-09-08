@@ -348,7 +348,9 @@
           if (servicePickerTrigger) servicePickerTrigger.textContent = name;
         }
 
-        if (orderSection) {
+        if (window.BakuServisNavigation?.go) {
+          window.BakuServisNavigation.go('request');
+        } else if (orderSection) {
           orderSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
