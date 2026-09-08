@@ -57,7 +57,7 @@
     });
   });
 
-  const initialScreen = localStorage.getItem('bakuservis-screen') || 'home';
+  const initialScreen = isNativeApp ? 'home' : (localStorage.getItem('bakuservis-screen') || 'home');
   setScreen(initialScreen);
 
   if ('serviceWorker' in navigator) {
