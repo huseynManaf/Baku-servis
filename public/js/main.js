@@ -317,12 +317,6 @@
     const value = String(service?.category || service?.name || 'SERVICE').toUpperCase();
     return value.replace(/\s+/g, '_').slice(0, 18);
   }
-  function formatStartingPrice(value) {
-    const amount = Number(value || 0);
-    if (!Number.isFinite(amount) || amount <= 0) return 'Diaqnostikadan sonra';
-    return `${amount.toFixed(0)} ₼-dən başlayaraq`;
-  }
-  servicePickerOptions.innerHTML = list.map((service) => `<button type="button" class="service-picker-option" role="option" data-service-value="${service.name}"><span>${service.name}</span><strong>${formatStartingPrice(service.price)}</strong></button>`).join('');
 
   function renderServiceCards(services) {
     if (!serviceCards) return;
@@ -338,7 +332,6 @@
         <p>Peşəkar texniki yardım, dəqiq qiymətləndirmə və sürətli status izləmə.</p>
         <div class="svc-price-row">
           <span class="svc-price">${Number(service.price || 0).toFixed(2)} ₼</span>
-                  <span class="svc-price">${formatStartingPrice(service.price)}</span>
         </div>
         <button type="button" class="btn btn-primary btn-sm svc-pick" data-service-name="${service.name}">Seç</button>
       </article>
