@@ -6,6 +6,7 @@ const http = require('http');
 const express = require('express');
 const cors = require('cors');
 const session = require('express-session');
+const PgSession = require('connect-pg-simple')(session);
 const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
 const { Pool } = require('pg');
@@ -334,16 +335,54 @@ async function sendTelegramNotification(text) {
   }
 }
 
-function sendAdminEmail({ title, summary, details }) {
-  const subject = title;
-  const text = `${summary}\n\n${Object.entries(details || {}).map(([key, value]) => `${key}: ${value}`).join('\n')}`;
-  return sendGmailNotification({
-    from: process.env.GMAIL_USER || process.env.EMAIL_USER || MAIL_FROM,
-    to: process.env.NOTIFICATION_EMAIL || process.env.GMAIL_USER || ADMIN_EMAIL,
-    subject,
-    text,
-    html: buildNotificationHtml({ title, summary, details })
-  });
+async function sendAdminEmail({ title, summary, details } = {}) {
+  const subject = String(title || 'Baku Servis Bildirişi');
+  const text = `${String(summary || '')}\n\n${Object.entries(details || {}).map(([key, value]) => `${key}: ${value}`).join('\n')}`;
+  const html = buildNotificationHtml({ title: subject, summary: String(summary || ''), details });
+  const resendApiKey = String(process.env.RESEND_API_KEY || '').trim();
+  const recipient = String(process.env.NOTIFICATION_EMAIL || process.env.GMAIL_USER || ADMIN_EMAIL).trim();
+
+  if (resendApiKey && recipient) {
+    try {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: process.env.RESEND_FROM || 'Baku Servis <onboarding@resend.dev>',
+          to: [recipient],
+          subject,
+          text,
+          html
+        })
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        console.error('Resend email notification failed:', { status: response.status, body, subject });
+        return null;
+      }
+      console.log('Resend email notification sent:', body.id || 'accepted');
+      return body;
+    } catch (error) {
+      console.error('Resend email notification error (non-blocking):', error.message || error);
+      return null;
+    }
+  }
+
+  try {
+    return await sendGmailNotification({
+      from: process.env.GMAIL_USER || process.env.EMAIL_USER || MAIL_FROM,
+      to: recipient,
+      subject,
+      text,
+      html
+    });
+  } catch (error) {
+    console.error('Email notification fallback failed (non-blocking):', error.message || error);
+    return null;
+  }
 }
 
 function extractTrackingCode(value) {
@@ -605,6 +644,11 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
+  store: new PgSession({
+    pool,
+    tableName: 'user_sessions',
+    createTableIfMissing: true
+  }),
   secret: process.env.SESSION_SECRET || 'bakuservis-session-secret',
   resave: false,
   saveUninitialized: false,
@@ -1454,44 +1498,4 @@ io.on('connection', (socket) => {
     socket.emit('admin:joined', { ok: true });
   });
 });
-async function sendAdminEmail(subject, htmlContent) {
-    const resendApiKey = process.env.RESEND_API_KEY;
-    const toEmail = process.env.NOTIFICATION_EMAIL || process.env.GMAIL_USER;
-
-    if (!resendApiKey) {
-        console.log('Resend API key is not configured in environment variables.');
-        return;
-    }
-
-    if (!toEmail) {
-        console.log('Target notification email is not configured.');
-        return;
-    }
-
-    try {
-        const response = await fetch('https://api.resend.com/emails', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${resendApiKey}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                from: 'Baku Servis <onboarding@resend.dev>',
-                to: [toEmail],
-                subject: subject,
-                html: htmlContent
-            })
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            console.error('Email notification failed via Resend API:', data);
-        } else {
-            console.log('Email notification sent successfully via Resend, ID:', data.id);
-        }
-    } catch (error) {
-        console.error('Email notification network error:', error.message);
-    }
-}
 startServer();

@@ -16,6 +16,8 @@ cp .env.example .env
 npm start
 ```
 
+Production mühitində dependency quraşdırılması üçün `npm install --omit=dev` istifadə edin.
+
 Server ayağa qalxanda konsolda görəcəksiniz:
 ```
 Baku Servis 3000 portunda işə düşdü -> http://localhost:3000
