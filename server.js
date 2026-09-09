@@ -340,9 +340,13 @@ async function sendAdminEmail({ title, summary, details } = {}) {
   const text = `${String(summary || '')}\n\n${Object.entries(details || {}).map(([key, value]) => `${key}: ${value}`).join('\n')}`;
   const html = buildNotificationHtml({ title: subject, summary: String(summary || ''), details });
   const resendApiKey = String(process.env.RESEND_API_KEY || '').trim();
-  const recipient = String(process.env.NOTIFICATION_EMAIL || process.env.GMAIL_USER || ADMIN_EMAIL).trim();
+  const configuredRecipient = String(process.env.NOTIFICATION_EMAIL || process.env.GMAIL_USER || ADMIN_EMAIL).trim();
+  const resendDomainVerified = String(process.env.RESEND_DOMAIN_VERIFIED || '').toLowerCase() === 'true';
+  const recipientEmail = process.env.NODE_ENV === 'production' && resendDomainVerified
+    ? configuredRecipient
+    : 'huseynim@code.edu.az';
 
-  if (resendApiKey && recipient) {
+  if (resendApiKey && recipientEmail) {
     try {
       const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -352,7 +356,7 @@ async function sendAdminEmail({ title, summary, details } = {}) {
         },
         body: JSON.stringify({
           from: process.env.RESEND_FROM || 'Baku Servis <onboarding@resend.dev>',
-          to: [recipient],
+          to: [recipientEmail],
           subject,
           text,
           html
@@ -374,7 +378,7 @@ async function sendAdminEmail({ title, summary, details } = {}) {
   try {
     return await sendGmailNotification({
       from: process.env.GMAIL_USER || process.env.EMAIL_USER || MAIL_FROM,
-      to: recipient,
+      to: configuredRecipient,
       subject,
       text,
       html
