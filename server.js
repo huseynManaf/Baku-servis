@@ -526,8 +526,8 @@ async function handleTelegramAdminMessage(message) {
 
 async function configureTelegramWebhook() {
   const telegramToken = String(process.env.TELEGRAM_BOT_TOKEN || '').trim();
-  const webhookUrl = String(process.env.TELEGRAM_WEBHOOK_URL || '').trim();
-  if (!telegramToken || !webhookUrl) return;
+  const webhookUrl = String(process.env.TELEGRAM_WEBHOOK_URL || 'https://bakuservis.az/api/telegram-webhook').trim();
+  if (!telegramToken) return;
 
   const body = { url: webhookUrl };
   const secret = String(process.env.TELEGRAM_WEBHOOK_SECRET || '').trim();
@@ -543,7 +543,7 @@ async function configureTelegramWebhook() {
     if (!response.ok || result.ok === false) {
       throw new Error(result.description || `Telegram HTTP ${response.status}`);
     }
-    console.log('Telegram webhook configured:', webhookUrl);
+    console.log('[Telegram Webhook Auto-Registered]', webhookUrl);
   } catch (error) {
     console.error('Telegram webhook configuration failed:', error.message || error);
   }
