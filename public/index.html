@@ -351,6 +351,11 @@
                 </div>
 
                 <div class="field">
+                  <label for="customer_email">E-poçt</label>
+                  <input id="customer_email" name="customer_email" type="email" placeholder="example@mail.com" autocomplete="email" aria-label="Müştəri e-poçtu" />
+                </div>
+
+                <div class="field">
                   <span class="field-label">Xidmət</span>
                   <select id="service_name" class="service-select sr-only" name="service_name" required autocomplete="off" aria-hidden="true" tabindex="-1"></select>
                   <div class="service-picker" id="service-picker" role="listbox" aria-label="Xidmət seçimi">
@@ -481,6 +486,7 @@
             <div class="track-head"><div><div class="meta-label">Xidmət</div><h3 id="result-service">-</h3><div class="meta" id="result-device">-</div></div><span class="status-chip status-yeni" id="result-status">-</span></div>
             <div id="request-status-timeline" class="status-timeline" aria-label="Müraciət statusu"></div>
             <div class="request-note" id="result-problem-description-wrap" style="display:none;"><span class="meta-label">Problemin təsviri / Əlavə qeydlər</span><p id="result-problem-description"></p></div>
+            <div class="request-support-messages" id="request-support-messages" style="display:none;"><span class="meta-label">Destək mesajları</span><div id="request-support-message-list"></div></div>
             <div class="tracking-details"><div class="meta"><span>Yaradılma</span><strong id="result-created">-</strong></div><div class="meta"><span>Status yenilənmə</span><strong id="result-updated">-</strong></div><div class="meta"><span>İlkin / Təklif olunan</span><strong id="result-quoted">-</strong></div><div class="meta"><span>Yekun ödəniləcək</span><strong id="result-final">-</strong></div><div class="meta"><span>Ödəniş üsulu</span><strong id="result-payment-method">-</strong></div><div class="meta"><span>Ödəniş statusu</span><strong id="result-payment-status">-</strong></div><div id="result-address-wrap" class="meta" style="display:none;"><span>Ünvan</span><strong id="result-address">-</strong></div></div>
             <a id="order-support-link" class="order-support-link" href="#" target="_blank" rel="noopener" style="display:none;">💬 Bu müraciət üzrə yaz</a>
             <div id="post-submit-choice" class="post-submit-choice" style="display:none; margin-top:18px;"><div class="choice-title">Ödəniş seçimi</div><div class="choice-description">Bu sifariş hələ ödənilməmişdir.</div><div class="choice-actions"><button type="button" id="pay-now-btn" class="btn btn-primary btn-block">İndi Öncədən Ödə</button><button type="button" id="pay-later-btn" class="btn btn-outline btn-block">Təhvil Alarkən Ödə</button></div></div>

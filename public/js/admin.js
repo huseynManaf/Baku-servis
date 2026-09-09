@@ -246,6 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('detail-code').value = request.tracking_code;
       document.getElementById('detail-name').value = request.customer_name;
       document.getElementById('detail-phone').value = request.customer_phone;
+      document.getElementById('detail-email').value = request.customer_email || '-';
       document.getElementById('detail-device').value = request.device_info || '-';
       document.getElementById('detail-problem-description').value = request.problem_description || 'Əlavə qeyd yoxdur.';
       document.getElementById('detail-service').value = request.service_name || '-';

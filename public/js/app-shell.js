@@ -83,5 +83,6 @@
   if (window.io) {
     const socket = window.io({ transports: ['websocket', 'polling'] });
     socket.on('request:status-updated', (payload) => window.dispatchEvent(new CustomEvent('bakuservis:status', { detail: payload.request })));
+    socket.on('chat:message', (payload) => window.dispatchEvent(new CustomEvent('bakuservis:order-message', { detail: payload })));
   }
 })();

@@ -335,12 +335,36 @@ async function sendTelegramNotification(text) {
   }
 }
 
-async function sendAdminEmail({ title, summary, details } = {}) {
+async function sendTelegramReply(message, text) {
+  const telegramToken = String(process.env.TELEGRAM_BOT_TOKEN || '').trim();
+  const chatId = String(message?.chat?.id || process.env.TELEGRAM_ADMIN_CHAT_ID || process.env.TELEGRAM_CHAT_ID || '').trim();
+  if (!telegramToken || !chatId || !text) return null;
+
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        reply_to_message_id: message.message_id
+      })
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || body.ok === false) throw new Error(body.description || `Telegram HTTP ${response.status}`);
+    return body;
+  } catch (error) {
+    console.error('Telegram reply notification failed:', error.message || error);
+    return null;
+  }
+}
+
+async function sendAdminEmail({ title, summary, details, recipientEmail: requestedRecipient } = {}) {
   const subject = String(title || 'Baku Servis Bildirişi');
   const text = `${String(summary || '')}\n\n${Object.entries(details || {}).map(([key, value]) => `${key}: ${value}`).join('\n')}`;
   const html = buildNotificationHtml({ title: subject, summary: String(summary || ''), details });
   const resendApiKey = String(process.env.RESEND_API_KEY || '').trim();
-  const configuredRecipient = String(process.env.NOTIFICATION_EMAIL || process.env.GMAIL_USER || ADMIN_EMAIL).trim();
+  const configuredRecipient = String(requestedRecipient || process.env.NOTIFICATION_EMAIL || process.env.GMAIL_USER || ADMIN_EMAIL).trim();
   const resendDomainVerified = String(process.env.RESEND_DOMAIN_VERIFIED || '').toLowerCase() === 'true';
   const recipientEmail = process.env.NODE_ENV === 'production' && resendDomainVerified
     ? configuredRecipient
@@ -390,7 +414,7 @@ async function sendAdminEmail({ title, summary, details } = {}) {
 }
 
 function extractTrackingCode(value) {
-  const match = String(value || '').toUpperCase().match(/\bHG-[A-Z0-9]{6}\b/);
+  const match = String(value || '').toUpperCase().match(/\bHG-[A-Z0-9]+\b/);
   return match ? match[0] : '';
 }
 
@@ -444,14 +468,50 @@ async function handleTelegramAdminMessage(message) {
   if (!text || text.startsWith('/start')) return { ok: true, ignored: true };
 
   const replyText = message.reply_to_message?.text || '';
+  const trackingCode = extractTrackingCode(replyText) || extractTrackingCode(text);
+  const reply = extractTelegramReply(text);
+  if (!reply) return { ok: false, error: 'empty_reply' };
+
+  if (trackingCode) {
+    const request = await get('SELECT * FROM requests WHERE UPPER(tracking_code) = ? LIMIT 1', [trackingCode]);
+    if (!request) {
+      await sendTelegramReply(message, `⚠️ ${trackingCode} kodlu müraciət tapılmadı.`);
+      return { ok: false, error: 'request_not_found' };
+    }
+
+    const sessionRow = await get('SELECT session_id FROM chat_messages WHERE customer_phone = ? ORDER BY id DESC LIMIT 1', [normalizePhone(request.customer_phone)]);
+    const sessionId = sessionRow?.session_id || `request-${trackingCode}`;
+    const saved = await run(
+      'INSERT INTO chat_messages (session_id, sender_type, message, customer_name, customer_phone, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [sessionId, 'admin', reply, request.customer_name || null, request.customer_phone || null, nowIso()]
+    );
+    const row = await get('SELECT * FROM chat_messages WHERE id = ?', [saved.lastInsertRowid]);
+    io.emit('chat:message', { session_id: sessionId, sender_type: 'admin', message: reply, tracking_code: trackingCode });
+
+    if (request.customer_email) {
+      await sendAdminEmail({
+        recipientEmail: request.customer_email,
+        title: `Baku Servis — ${trackingCode} üzrə yeni cavab`,
+        summary: reply,
+        details: { 'Müştəri': request.customer_name || '-', 'İzləmə kodu': trackingCode, 'Cihaz': request.device_info || '-' }
+      });
+    } else {
+      await sendAdminEmail({
+        title: `Telegram cavabı — ${trackingCode}`,
+        summary: 'Müştərinin e-poçtu qeyd edilmədiyi üçün cavab admin bildirişi kimi saxlanıldı.',
+        details: { 'İzləmə kodu': trackingCode, 'Müştəri': request.customer_name || '-', 'Cavab': reply }
+      });
+    }
+
+    await sendTelegramReply(message, `✅ Mesaj müştəriyə (${trackingCode}) uğurla çatdırıldı.`);
+    return { ok: true, message: row, tracking_code: trackingCode, session_id: sessionId };
+  }
+
   const sessionId = await resolveTelegramChatSession(text, replyText);
   if (!sessionId) {
     await sendTelegramNotification('⚠️ Cavabı çatla əlaqələndirmək alınmadı. Mesajı canlı chat bildirişinə Reply edərək yazın və ya belə göndərin: /reply HG-XXXXXX cavabınız');
     return { ok: false, error: 'chat_not_found' };
   }
-
-  const reply = extractTelegramReply(text);
-  if (!reply) return { ok: false, error: 'empty_reply' };
 
   const metadata = await get('SELECT customer_name, customer_phone FROM chat_messages WHERE session_id = ? ORDER BY id DESC LIMIT 1', [sessionId]);
   const saved = await run(
@@ -579,11 +639,13 @@ async function ensurePostgresDatabase() {
   await run(`CREATE TABLE IF NOT EXISTS services (id SERIAL PRIMARY KEY, name TEXT NOT NULL UNIQUE, category TEXT NOT NULL DEFAULT 'Genel', price NUMERIC(12, 2) DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
   await run('ALTER TABLE services ADD COLUMN IF NOT EXISTS price NUMERIC(12, 2) DEFAULT 0');
 
-  const requestSchema = `id SERIAL PRIMARY KEY, tracking_code TEXT UNIQUE NOT NULL, customer_name TEXT NOT NULL, customer_phone TEXT NOT NULL, service_name TEXT NOT NULL, device_model TEXT, device_info TEXT, problem_description TEXT, status TEXT NOT NULL DEFAULT 'Sifariş qəbul edildi', quoted_price NUMERIC(12, 2) DEFAULT 0, final_price NUMERIC(12, 2) DEFAULT 0, is_onsite INTEGER NOT NULL DEFAULT 0, address TEXT, latitude DOUBLE PRECISION, longitude DOUBLE PRECISION, payment_method TEXT NOT NULL DEFAULT 'later', payment_status TEXT NOT NULL DEFAULT 'Ödənilməyib', idempotency_key TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP`;
+  const requestSchema = `id SERIAL PRIMARY KEY, tracking_code TEXT UNIQUE NOT NULL, customer_name TEXT NOT NULL, customer_phone TEXT NOT NULL, customer_email TEXT, service_name TEXT NOT NULL, device_model TEXT, device_info TEXT, problem_description TEXT, status TEXT NOT NULL DEFAULT 'Sifariş qəbul edildi', quoted_price NUMERIC(12, 2) DEFAULT 0, final_price NUMERIC(12, 2) DEFAULT 0, is_onsite INTEGER NOT NULL DEFAULT 0, address TEXT, latitude DOUBLE PRECISION, longitude DOUBLE PRECISION, payment_method TEXT NOT NULL DEFAULT 'later', payment_status TEXT NOT NULL DEFAULT 'Ödənilməyib', idempotency_key TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP`;
   await run(`CREATE TABLE IF NOT EXISTS requests (${requestSchema})`);
   await run(`CREATE TABLE IF NOT EXISTS orders (${requestSchema})`);
   await run('ALTER TABLE requests ADD COLUMN IF NOT EXISTS problem_description TEXT');
   await run('ALTER TABLE orders ADD COLUMN IF NOT EXISTS problem_description TEXT');
+  await run('ALTER TABLE requests ADD COLUMN IF NOT EXISTS customer_email TEXT');
+  await run('ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_email TEXT');
   for (const table of ['requests', 'orders']) {
     for (const [legacyStatus, currentStatus] of REQUEST_STATUS_ALIASES) {
       await run(`UPDATE ${table} SET status = ? WHERE status = ?`, [currentStatus, legacyStatus]);
@@ -743,7 +805,7 @@ async function notifyStatusSubscribers(request) {
   }));
 }
 
-app.post('/api/telegram/webhook', async (req, res) => {
+app.post(['/api/telegram/webhook', '/api/telegram-webhook'], async (req, res) => {
   const configuredSecret = String(process.env.TELEGRAM_WEBHOOK_SECRET || '').trim();
   const receivedSecret = String(req.get('x-telegram-bot-api-secret-token') || '').trim();
   if (configuredSecret && receivedSecret !== configuredSecret) {
@@ -937,6 +999,7 @@ app.post('/api/requests', async (req, res) => {
     const customer_name = String(req.body.customer_name || '').trim();
     const submittedPhone = sanitizePhoneInput(req.body.customer_phone || '');
     const customer_phone = normalizePhone(submittedPhone);
+    const customer_email = String(req.body.customer_email || '').trim().toLowerCase();
     const service_name = String(req.body.service_name || '').trim();
     const idempotency_key = String(req.body.idempotency_key || '').trim().slice(0, 120);
     const device_info = String(req.body.device_info || '').trim();
@@ -995,6 +1058,7 @@ app.post('/api/requests', async (req, res) => {
       tracking_code,
       customer_name,
       customer_phone,
+      customer_email || null,
       service_name,
       device_model || device_info || null,
       device_info || null,
@@ -1013,15 +1077,15 @@ app.post('/api/requests', async (req, res) => {
       timestamp
     ];
 
-    const orderInsert = [...requestInsert.slice(0, 16), ...requestInsert.slice(17)];
+    const orderInsert = [...requestInsert.slice(0, 17), ...requestInsert.slice(18)];
     const result = await run(`
-      INSERT INTO requests (tracking_code, customer_name, customer_phone, service_name, device_model, device_info, problem_description, status, quoted_price, final_price, is_onsite, address, latitude, longitude, payment_method, payment_status, idempotency_key, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO requests (tracking_code, customer_name, customer_phone, customer_email, service_name, device_model, device_info, problem_description, status, quoted_price, final_price, is_onsite, address, latitude, longitude, payment_method, payment_status, idempotency_key, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, requestInsert);
 
     const orderResult = await run(`
-      INSERT INTO orders (tracking_code, customer_name, customer_phone, service_name, device_model, device_info, problem_description, status, quoted_price, final_price, is_onsite, address, latitude, longitude, payment_method, payment_status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO orders (tracking_code, customer_name, customer_phone, customer_email, service_name, device_model, device_info, problem_description, status, quoted_price, final_price, is_onsite, address, latitude, longitude, payment_method, payment_status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, orderInsert);
 
     emitAdminNotification({
@@ -1103,6 +1167,7 @@ app.get('/api/requests/track/:code', async (req, res) => {
         tracking_code: row.tracking_code,
         customer_name: row.customer_name,
         customer_phone: row.customer_phone,
+        customer_email: row.customer_email || '',
         service_name: row.service_name,
         device_info: row.device_info,
         problem_description: row.problem_description || '',
@@ -1148,6 +1213,24 @@ app.get('/api/requests/by-phone/:phone', async (req, res) => {
   } catch (error) {
     console.error('GET /api/requests/by-phone error:', error);
     return res.status(500).json({ error: 'Müraciət tarixçəsi yüklənə bilmədi.' });
+  }
+});
+
+app.get('/api/requests/:code/messages', async (req, res) => {
+  try {
+    const trackingCode = String(req.params.code || '').trim().toUpperCase();
+    const request = await get('SELECT customer_phone FROM requests WHERE UPPER(tracking_code) = ? LIMIT 1', [trackingCode]);
+    if (!request) return res.status(404).json({ error: 'Müraciət tapılmadı.' });
+
+    const sessionId = `request-${trackingCode}`;
+    const rows = await all(
+      'SELECT id, sender_type, message, created_at FROM chat_messages WHERE session_id = ? OR (customer_phone = ? AND sender_type = ?) ORDER BY created_at ASC',
+      [sessionId, normalizePhone(request.customer_phone), 'admin']
+    );
+    return res.json({ ok: true, messages: rows || [] });
+  } catch (error) {
+    console.error('GET /api/requests/:code/messages error:', error);
+    return res.status(500).json({ error: 'Müraciət mesajları yüklənə bilmədi.' });
   }
 });
 
