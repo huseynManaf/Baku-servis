@@ -655,7 +655,12 @@ async function ensurePostgresDatabase() {
       await run(`UPDATE ${table} SET status = ? WHERE status = ?`, [currentStatus, legacyStatus]);
     }
   }
-  await run(`CREATE TABLE IF NOT EXISTS chat_messages (id SERIAL PRIMARY KEY, session_id TEXT NOT NULL, sender_type TEXT NOT NULL CHECK(sender_type IN ('customer', 'admin', 'bot')), message TEXT NOT NULL, customer_name TEXT, customer_phone TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
+  await run(`CREATE TABLE IF NOT EXISTS chat_sessions (session_id TEXT PRIMARY KEY, tracking_code TEXT, status TEXT NOT NULL DEFAULT 'active', operator_forwarded BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
+  await run('ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS tracking_code TEXT');
+  await run("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'");
+  await run('ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS operator_forwarded BOOLEAN NOT NULL DEFAULT FALSE');
+  await run(`CREATE TABLE IF NOT EXISTS chat_messages (id SERIAL PRIMARY KEY, session_id TEXT NOT NULL, tracking_code TEXT, sender_type TEXT NOT NULL CHECK(sender_type IN ('customer', 'admin', 'bot')), message TEXT NOT NULL, customer_name TEXT, customer_phone TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
+  await run('ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS tracking_code TEXT');
   await run(`CREATE TABLE IF NOT EXISTS push_subscriptions (id SERIAL PRIMARY KEY, tracking_code TEXT NOT NULL, endpoint TEXT UNIQUE NOT NULL, subscription JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
   await run('ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS customer_name TEXT');
   await run('ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS customer_phone TEXT');
@@ -1461,6 +1466,7 @@ app.post('/api/chat/send', async (req, res) => {
     const message = String(req.body.message || '').trim();
     const customerName = String(req.body.customer_name || '').trim();
     const customerPhone = normalizePhone(req.body.customer_phone || '');
+    const trackingCode = extractTrackingCode(req.body.tracking_code || '');
 
     if (!['customer', 'admin', 'bot'].includes(senderType) || !message) {
       return res.status(400).json({ error: 'Göndərən və mesaj mütləqdir.' });
@@ -1470,12 +1476,16 @@ app.post('/api/chat/send', async (req, res) => {
       'SELECT customer_name, customer_phone FROM chat_messages WHERE session_id = ? AND (customer_name IS NOT NULL OR customer_phone IS NOT NULL) ORDER BY id DESC LIMIT 1',
       [sessionId]
     );
+    const chatSession = await get('SELECT tracking_code FROM chat_sessions WHERE session_id = ? LIMIT 1', [sessionId]);
+    const relatedTrackingCode = trackingCode || chatSession?.tracking_code || '';
     const resolvedCustomerName = customerName || existingSessionMeta?.customer_name || 'Müştəri';
     const resolvedCustomerPhone = customerPhone || existingSessionMeta?.customer_phone || '';
 
+    await run(`INSERT INTO chat_sessions (session_id, tracking_code, updated_at) VALUES (?, ?, ?) ON CONFLICT (session_id) DO UPDATE SET tracking_code = COALESCE(EXCLUDED.tracking_code, chat_sessions.tracking_code), updated_at = EXCLUDED.updated_at`, [sessionId, relatedTrackingCode || null, nowIso()]);
+
     const saved = await run(
-      'INSERT INTO chat_messages (session_id, sender_type, message, customer_name, customer_phone, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-      [sessionId, senderType, message, senderType === 'customer' ? resolvedCustomerName : (existingSessionMeta?.customer_name || null), senderType === 'customer' ? resolvedCustomerPhone : (existingSessionMeta?.customer_phone || null), nowIso()]
+      'INSERT INTO chat_messages (session_id, tracking_code, sender_type, message, customer_name, customer_phone, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [sessionId, relatedTrackingCode || null, senderType, message, senderType === 'customer' ? resolvedCustomerName : (existingSessionMeta?.customer_name || null), senderType === 'customer' ? resolvedCustomerPhone : (existingSessionMeta?.customer_phone || null), nowIso()]
     );
 
     const row = await get('SELECT * FROM chat_messages WHERE id = ?', [saved.lastInsertRowid]);
@@ -1484,8 +1494,8 @@ app.post('/api/chat/send', async (req, res) => {
       const sessionHistory = await all('SELECT * FROM chat_messages WHERE session_id = ? ORDER BY created_at ASC', [sessionId]);
       const botReply = getKnowledgeBaseReply(message, sessionHistory);
       const botSaved = await run(
-        'INSERT INTO chat_messages (session_id, sender_type, message, customer_name, customer_phone, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-        [sessionId, 'bot', botReply, resolvedCustomerName, resolvedCustomerPhone, nowIso()]
+        'INSERT INTO chat_messages (session_id, tracking_code, sender_type, message, customer_name, customer_phone, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [sessionId, relatedTrackingCode || null, 'bot', botReply, resolvedCustomerName, resolvedCustomerPhone, nowIso()]
       );
       const botRow = await get('SELECT * FROM chat_messages WHERE id = ?', [botSaved.lastInsertRowid]);
 
@@ -1496,7 +1506,8 @@ app.post('/api/chat/send', async (req, res) => {
           session_id: sessionId,
           sender_type: 'customer',
           customer_name: resolvedCustomerName,
-          customer_phone: resolvedCustomerPhone
+          customer_phone: resolvedCustomerPhone,
+          tracking_code: trackingCode || null
         }
       });
 
@@ -1507,6 +1518,7 @@ app.post('/api/chat/send', async (req, res) => {
           'Session ID': sessionId,
           'Müştəri': resolvedCustomerName,
           'Telefon': formatPhoneDisplay(resolvedCustomerPhone) || resolvedCustomerPhone || '-',
+          'Əlaqəli müraciət': trackingCode || 'Ümumi canlı chat',
           'Müştəri mesajı': message,
           'Bot cavabı': botReply
         }
@@ -1517,7 +1529,7 @@ app.post('/api/chat/send', async (req, res) => {
       return res.status(201).json({ ok: true, message: row, bot_message: botRow, reply: botReply });
     }
 
-    io.emit('chat:message', { session_id: sessionId, sender_type: senderType, message });
+    io.emit('chat:message', { session_id: sessionId, tracking_code: trackingCode || null, sender_type: senderType, message });
     return res.status(201).json({ ok: true, message: row });
   } catch (error) {
     console.error('POST /api/chat/send error:', error);
@@ -1548,6 +1560,7 @@ app.get('/api/admin/chats', requireAdmin, async (req, res) => {
     for (const row of rows) {
       const existing = sessions.get(row.session_id) || {
         session_id: row.session_id,
+        tracking_code: row.tracking_code || null,
         customer_name: row.customer_name || 'Müştəri',
         customer_phone: row.customer_phone || '',
         last_message: '',
@@ -1558,6 +1571,7 @@ app.get('/api/admin/chats', requireAdmin, async (req, res) => {
 
       if (row.customer_name) existing.customer_name = row.customer_name;
       if (row.customer_phone) existing.customer_phone = row.customer_phone;
+      if (row.tracking_code) existing.tracking_code = row.tracking_code;
       existing.last_message = row.message;
       existing.last_message_at = row.created_at;
       existing.messages.push(row);

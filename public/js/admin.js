@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const adminChatMessages = document.getElementById('admin-chat-messages');
   const adminChatInput = document.getElementById('admin-chat-input');
   const adminChatSend = document.getElementById('admin-chat-send');
+  const adminChatHeader = document.getElementById('admin-chat-header');
   const adminRoleBadge = document.getElementById('admin-role-badge');
   const usersView = document.getElementById('users-view');
   const createAdminCard = document.getElementById('create-admin-card');
@@ -458,9 +459,10 @@ document.addEventListener('DOMContentLoaded', () => {
       adminChatList.innerHTML = chats.length ? chats.map((chat) => {
         const customerName = chat.customer_name || 'Müştəri';
         const customerPhone = chat.customer_phone ? ` • ${chat.customer_phone}` : '';
+        const trackingCode = chat.tracking_code ? ` • ${chat.tracking_code}` : '';
         return `
           <div class="admin-chat-item ${currentChatSession === chat.session_id ? 'active' : ''}" data-session-id="${chat.session_id}">
-            <strong>${customerName}${customerPhone}</strong>
+            <strong>${customerName}${customerPhone}${trackingCode}</strong>
             <div>${chat.last_message || 'Mesaj yoxdur'}</div>
             <small>${chat.unread_count ? `${chat.unread_count} oxunmamış` : 'Oxunmuş'} · ${formatDateTime(chat.last_message_at)}</small>
           </div>
@@ -489,6 +491,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!sessionId) return;
     currentChatSession = sessionId;
     try {
+      const chatsResponse = await fetch('/api/admin/chats');
+      const chatsBody = await chatsResponse.json();
+      const selectedChat = chatsBody.chats?.find((chat) => chat.session_id === sessionId);
+      if (adminChatHeader) adminChatHeader.textContent = selectedChat?.tracking_code ? `Əlaqədar Müraciət: ${selectedChat.tracking_code}` : 'Ümumi canlı chat';
       const response = await fetch(`/api/chat/history/${encodeURIComponent(sessionId)}`);
       const data = await response.json();
       const messages = data.messages || [];

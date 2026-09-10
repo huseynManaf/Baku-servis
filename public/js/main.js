@@ -964,6 +964,7 @@
     localStorage.setItem('bakuservis-chat-session', sessionId);
     const identity = getStoredCustomerIdentity();
     let chatTrackingCode = '';
+    let contextMessageSentFor = '';
 
     const chatToggleBtn = document.getElementById('chat-toggle-btn');
     const chatPanel = document.getElementById('chat-panel');
@@ -1028,7 +1029,23 @@
     window.addEventListener('bakuservis:open-chat', (event) => {
       chatTrackingCode = String(event.detail?.trackingCode || '');
       setChatOpen(true);
-      void loadChatHistory();
+      if (chatTrackingCode && contextMessageSentFor !== chatTrackingCode) {
+        contextMessageSentFor = chatTrackingCode;
+        void fetch('/api/chat/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: sessionId,
+            sender_type: 'customer',
+            message: `Salam, mənim ${chatTrackingCode} nömrəli sifarişimlə/müraciətimlə bağlı sualım var.`,
+            customer_name: identity.name,
+            customer_phone: identity.phone,
+            tracking_code: chatTrackingCode
+          })
+        }).then(() => loadChatHistory()).catch((error) => console.error('request chat context error:', error));
+      } else {
+        void loadChatHistory();
+      }
     });
 
     chatInput?.addEventListener('focus', () => setChatOpen(true));
