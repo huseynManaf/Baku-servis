@@ -441,7 +441,7 @@ async function resolveTelegramChatSession(text, replyText = '') {
   if (trackingCode) {
     const request = await get('SELECT customer_phone FROM requests WHERE UPPER(tracking_code) = ?', [trackingCode]);
     if (request?.customer_phone) {
-      const chat = await get('SELECT session_id FROM chat_messages WHERE customer_phone = ? ORDER BY id DESC LIMIT 1', [normalizePhone(request.customer_phone)]);
+      const chat = await get('SELECT session_id FROM chat_messages WHERE customer_phone = ? ORDER BY created_at DESC LIMIT 1', [normalizePhone(request.customer_phone)]);
       if (chat?.session_id) return chat.session_id;
     }
   }
@@ -479,13 +479,13 @@ async function handleTelegramAdminMessage(message) {
       return { ok: false, error: 'request_not_found' };
     }
 
-    const sessionRow = await get('SELECT session_id FROM chat_messages WHERE customer_phone = ? ORDER BY id DESC LIMIT 1', [normalizePhone(request.customer_phone)]);
+    const sessionRow = await get('SELECT session_id FROM chat_messages WHERE customer_phone = ? ORDER BY created_at DESC LIMIT 1', [normalizePhone(request.customer_phone)]);
     const sessionId = sessionRow?.session_id || `request-${trackingCode}`;
     const saved = await run(
       'INSERT INTO chat_messages (session_id, sender_type, message, customer_name, customer_phone, created_at) VALUES (?, ?, ?, ?, ?, ?)',
       [sessionId, 'admin', reply, request.customer_name || null, request.customer_phone || null, nowIso()]
     );
-    const row = await get('SELECT * FROM chat_messages WHERE id = ?', [saved.lastInsertRowid]);
+    const row = saved.row;
     io.emit('chat:message', { session_id: sessionId, sender_type: 'admin', message: reply, tracking_code: trackingCode });
 
     if (request.customer_email) {
@@ -513,12 +513,12 @@ async function handleTelegramAdminMessage(message) {
     return { ok: false, error: 'chat_not_found' };
   }
 
-  const metadata = await get('SELECT customer_name, customer_phone FROM chat_messages WHERE session_id = ? ORDER BY id DESC LIMIT 1', [sessionId]);
+  const metadata = await get('SELECT customer_name, customer_phone FROM chat_messages WHERE session_id = ? ORDER BY created_at DESC LIMIT 1', [sessionId]);
   const saved = await run(
     'INSERT INTO chat_messages (session_id, sender_type, message, customer_name, customer_phone, created_at) VALUES (?, ?, ?, ?, ?, ?)',
     [sessionId, 'admin', reply, metadata?.customer_name || null, metadata?.customer_phone || null, nowIso()]
   );
-  const row = await get('SELECT * FROM chat_messages WHERE id = ?', [saved.lastInsertRowid]);
+  const row = saved.row;
   io.emit('chat:message', { session_id: sessionId, sender_type: 'admin', message: reply });
   await sendTelegramNotification(`✅ Cavab canlı çata göndərildi.\n\nSession ID: ${sessionId}`);
   return { ok: true, message: row, session_id: sessionId };
@@ -585,12 +585,17 @@ function convertPlaceholders(sql) {
 function run(sql, params = []) {
   const normalizedSql = convertPlaceholders(sql);
   const querySql = /^\s*INSERT\s/i.test(normalizedSql) && !/\bRETURNING\b/i.test(normalizedSql)
-    ? `${normalizedSql.trim().replace(/;$/, '')} RETURNING id`
+    ? `${normalizedSql.trim().replace(/;$/, '')} RETURNING *`
     : normalizedSql;
-  return pool.query(querySql, params).then((result) => ({
-    lastInsertRowid: result.rows[0]?.id || null,
-    changes: result.rowCount || 0
-  }));
+  return pool.query(querySql, params).then((result) => {
+    const row = result.rows[0] || null;
+    return {
+      ...row,
+      row,
+      lastInsertRowid: row?.id ?? row?.message_id ?? null,
+      changes: result.rowCount || 0
+    };
+  });
 }
 
 function get(sql, params = []) {
@@ -1474,7 +1479,7 @@ app.post('/api/chat/send', async (req, res) => {
     }
 
     const existingSessionMeta = await get(
-      'SELECT customer_name, customer_phone FROM chat_messages WHERE session_id = ? AND (customer_name IS NOT NULL OR customer_phone IS NOT NULL) ORDER BY id DESC LIMIT 1',
+      'SELECT customer_name, customer_phone FROM chat_messages WHERE session_id = ? AND (customer_name IS NOT NULL OR customer_phone IS NOT NULL) ORDER BY created_at DESC LIMIT 1',
       [sessionId]
     );
     const chatSession = await get('SELECT tracking_code FROM chat_sessions WHERE session_id = ? LIMIT 1', [sessionId]);
@@ -1489,7 +1494,7 @@ app.post('/api/chat/send', async (req, res) => {
       [sessionId, relatedTrackingCode || null, senderType, message, senderType === 'customer' ? resolvedCustomerName : (existingSessionMeta?.customer_name || null), senderType === 'customer' ? resolvedCustomerPhone : (existingSessionMeta?.customer_phone || null), nowIso()]
     );
 
-    const row = await get('SELECT * FROM chat_messages WHERE id = ?', [saved.lastInsertRowid]);
+    const row = saved.row;
 
     if (senderType === 'customer') {
       const sessionHistory = await all('SELECT * FROM chat_messages WHERE session_id = ? ORDER BY created_at ASC', [sessionId]);
@@ -1498,7 +1503,7 @@ app.post('/api/chat/send', async (req, res) => {
         'INSERT INTO chat_messages (session_id, tracking_code, sender_type, message, customer_name, customer_phone, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
         [sessionId, relatedTrackingCode || null, 'bot', botReply, resolvedCustomerName, resolvedCustomerPhone, nowIso()]
       );
-      const botRow = await get('SELECT * FROM chat_messages WHERE id = ?', [botSaved.lastInsertRowid]);
+      const botRow = botSaved.row;
 
       emitAdminNotification({
         title: 'Yeni canlı chat',
