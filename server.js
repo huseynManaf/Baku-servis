@@ -660,10 +660,11 @@ async function ensurePostgresDatabase() {
       await run(`UPDATE ${table} SET status = ? WHERE status = ?`, [currentStatus, legacyStatus]);
     }
   }
-  await run(`CREATE TABLE IF NOT EXISTS chat_sessions (session_id TEXT PRIMARY KEY, tracking_code TEXT, status TEXT NOT NULL DEFAULT 'active', operator_forwarded BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
+  await run(`CREATE TABLE IF NOT EXISTS chat_sessions (session_id TEXT PRIMARY KEY, tracking_code TEXT, status TEXT NOT NULL DEFAULT 'active', operator_forwarded BOOLEAN NOT NULL DEFAULT FALSE, has_welcomed BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
   await run('ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS tracking_code TEXT');
   await run("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'");
   await run('ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS operator_forwarded BOOLEAN NOT NULL DEFAULT FALSE');
+  await run('ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS has_welcomed BOOLEAN NOT NULL DEFAULT FALSE');
   await run(`CREATE TABLE IF NOT EXISTS chat_messages (id SERIAL PRIMARY KEY, session_id TEXT NOT NULL, tracking_code TEXT, sender_type TEXT NOT NULL CHECK(sender_type IN ('customer', 'admin', 'bot')), message TEXT NOT NULL, customer_name TEXT, customer_phone TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
   await run('ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS id BIGSERIAL');
   await run('ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS tracking_code TEXT');
@@ -1482,12 +1483,16 @@ app.post('/api/chat/send', async (req, res) => {
       'SELECT customer_name, customer_phone FROM chat_messages WHERE session_id = ? AND (customer_name IS NOT NULL OR customer_phone IS NOT NULL) ORDER BY created_at DESC LIMIT 1',
       [sessionId]
     );
-    const chatSession = await get('SELECT tracking_code FROM chat_sessions WHERE session_id = ? LIMIT 1', [sessionId]);
+    const chatSession = await get('SELECT tracking_code, has_welcomed FROM chat_sessions WHERE session_id = ? LIMIT 1', [sessionId]);
     const relatedTrackingCode = trackingCode || chatSession?.tracking_code || '';
     const resolvedCustomerName = customerName || existingSessionMeta?.customer_name || 'Müştəri';
     const resolvedCustomerPhone = customerPhone || existingSessionMeta?.customer_phone || '';
 
     await run(`INSERT INTO chat_sessions (session_id, tracking_code, updated_at) VALUES (?, ?, ?) ON CONFLICT (session_id) DO UPDATE SET tracking_code = COALESCE(EXCLUDED.tracking_code, chat_sessions.tracking_code), updated_at = EXCLUDED.updated_at`, [sessionId, relatedTrackingCode || null, nowIso()]);
+    const shouldWelcome = senderType === 'customer' && !Boolean(chatSession?.has_welcomed);
+    if (shouldWelcome) {
+      await run('UPDATE chat_sessions SET has_welcomed = TRUE, updated_at = ? WHERE session_id = ?', [nowIso(), sessionId]);
+    }
 
     const saved = await run(
       'INSERT INTO chat_messages (session_id, tracking_code, sender_type, message, customer_name, customer_phone, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -1497,13 +1502,17 @@ app.post('/api/chat/send', async (req, res) => {
     const row = saved.row;
 
     if (senderType === 'customer') {
-      const sessionHistory = await all('SELECT * FROM chat_messages WHERE session_id = ? ORDER BY created_at ASC', [sessionId]);
-      const botReply = getKnowledgeBaseReply(message, sessionHistory);
-      const botSaved = await run(
-        'INSERT INTO chat_messages (session_id, tracking_code, sender_type, message, customer_name, customer_phone, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [sessionId, relatedTrackingCode || null, 'bot', botReply, resolvedCustomerName, resolvedCustomerPhone, nowIso()]
-      );
-      const botRow = botSaved.row;
+      let botReply = '';
+      let botRow = null;
+      if (shouldWelcome) {
+        const sessionHistory = await all('SELECT * FROM chat_messages WHERE session_id = ? ORDER BY created_at ASC', [sessionId]);
+        botReply = getKnowledgeBaseReply(message, sessionHistory);
+        const botSaved = await run(
+          'INSERT INTO chat_messages (session_id, tracking_code, sender_type, message, customer_name, customer_phone, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [sessionId, relatedTrackingCode || null, 'bot', botReply, resolvedCustomerName, resolvedCustomerPhone, nowIso()]
+        );
+        botRow = botSaved.row;
+      }
 
       emitAdminNotification({
         title: 'Yeni canlı chat',
