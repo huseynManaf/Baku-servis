@@ -660,6 +660,7 @@ async function ensurePostgresDatabase() {
   await run("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'");
   await run('ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS operator_forwarded BOOLEAN NOT NULL DEFAULT FALSE');
   await run(`CREATE TABLE IF NOT EXISTS chat_messages (id SERIAL PRIMARY KEY, session_id TEXT NOT NULL, tracking_code TEXT, sender_type TEXT NOT NULL CHECK(sender_type IN ('customer', 'admin', 'bot')), message TEXT NOT NULL, customer_name TEXT, customer_phone TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
+  await run('ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS id BIGSERIAL');
   await run('ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS tracking_code TEXT');
   await run(`CREATE TABLE IF NOT EXISTS push_subscriptions (id SERIAL PRIMARY KEY, tracking_code TEXT NOT NULL, endpoint TEXT UNIQUE NOT NULL, subscription JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
   await run('ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS customer_name TEXT');
