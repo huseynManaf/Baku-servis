@@ -9,8 +9,6 @@
   const trackingResult = document.getElementById('tracking-result');
   const resultService = document.getElementById('result-service');
   const resultDevice = document.getElementById('result-device');
-  const resultProblemDescriptionWrap = document.getElementById('result-problem-description-wrap');
-  const resultProblemDescription = document.getElementById('result-problem-description');
   const resultStatus = document.getElementById('result-status');
   const resultCreated = document.getElementById('result-created');
   const resultUpdated = document.getElementById('result-updated');
@@ -43,14 +41,16 @@
   const unifiedTrackingMessage = document.getElementById('unified-tracking-message');
   const statusTimeline = document.getElementById('request-status-timeline');
   const orderSupportLink = document.getElementById('order-support-link');
-  const supportMessages = document.getElementById('request-support-messages');
-  const supportMessageList = document.getElementById('request-support-message-list');
   const requestSubmitButton = requestForm?.querySelector('button[type="submit"]');
   let activeTrackingId = null;
   let requestSubmitting = false;
   let cachedTrackingRequest = null;
+  orderSupportLink?.addEventListener('click', () => {
+    window.dispatchEvent(new CustomEvent('bakuservis:open-chat', {
+      detail: { trackingCode: orderSupportLink.dataset.trackingCode || '' }
+    }));
+  });
   const AZERBAIJANI_PHONE_REGEX = /^(\+994|994|0)?(50|51|55|60|70|77|99)\d{7}$/;
-  const WHATSAPP_NUMBER = '994707164142';
   const REQUEST_STATUSES = [
     'Sifariş qəbul edildi',
     'Diaqnostikadadır',
@@ -123,31 +123,6 @@
     }).join('');
   }
 
-  function updateOrderSupportLink(request) {
-    if (!orderSupportLink) return;
-    if (!request?.tracking_code) {
-      orderSupportLink.style.display = 'none';
-      return;
-    }
-    const device = request.device_info || 'cihazım';
-    const message = `Salam, ${request.tracking_code} kodlu müraciətimlə bağlı sualım var. Cihaz: ${device}`;
-    orderSupportLink.href = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
-    orderSupportLink.style.display = 'inline-flex';
-  }
-
-  async function loadOrderSupportMessages(trackingCode) {
-    if (!supportMessages || !supportMessageList || !trackingCode) return;
-    try {
-      const response = await fetch(`/api/requests/${encodeURIComponent(trackingCode)}/messages`);
-      if (!response.ok) return;
-      const body = await response.json();
-      const messages = Array.isArray(body.messages) ? body.messages : [];
-      supportMessageList.innerHTML = messages.map((message) => `<div class="request-support-message"><strong>${message.sender_type === 'admin' ? 'Baku Servis' : 'Siz'}</strong><p>${String(message.message || '').replace(/\n/g, '<br>')}</p><small>${formatDate(message.created_at)}</small></div>`).join('');
-      supportMessages.style.display = messages.length ? 'block' : 'none';
-    } catch (error) {
-      console.warn('Order support messages unavailable:', error.message || error);
-    }
-  }
 
   function sanitizePhone(value) {
     const raw = String(value || '').trim();
@@ -907,16 +882,11 @@
       }
       resultService.textContent = request.service_name || '-';
       resultDevice.textContent = request.device_info || 'Cihaz məlumatı yoxdur';
-      if (resultProblemDescription && resultProblemDescriptionWrap) {
-        const description = String(request.problem_description || '').trim();
-        resultProblemDescription.textContent = description || 'Əlavə qeyd yoxdur.';
-        resultProblemDescriptionWrap.style.display = 'block';
-      }
       resultStatus.textContent = request.status || 'Sifariş qəbul edildi';
       resultStatus.className = `status-chip ${statusClass(request.status)}`;
       renderStatusTimeline(request.status);
-      updateOrderSupportLink(request);
-      void loadOrderSupportMessages(request.tracking_code || trackingCode);
+      orderSupportLink.dataset.trackingCode = request.tracking_code || trackingCode;
+      orderSupportLink.style.display = 'inline-flex';
       resultCreated.textContent = formatDate(request.created_at);
       resultUpdated.textContent = formatDate(request.updated_at);
       resultQuoted.textContent = `${Number(request.quoted_price || 0).toFixed(2)} ₼`;
@@ -947,16 +917,11 @@
         activeTrackingId = cached.id || null;
         resultService.textContent = cached.service_name || '-';
         resultDevice.textContent = cached.device_info || 'Cihaz məlumatı yoxdur';
-        if (resultProblemDescription && resultProblemDescriptionWrap) {
-          const description = String(cached.problem_description || '').trim();
-          resultProblemDescription.textContent = description || 'Əlavə qeyd yoxdur.';
-          resultProblemDescriptionWrap.style.display = 'block';
-        }
         resultStatus.textContent = `${cached.status || 'Sifariş qəbul edildi'} (offline)`;
         resultStatus.className = `status-chip ${statusClass(cached.status)}`;
         renderStatusTimeline(cached.status);
-        updateOrderSupportLink(cached);
-        void loadOrderSupportMessages(cached.tracking_code || trackingCode);
+        orderSupportLink.dataset.trackingCode = cached.tracking_code || trackingCode;
+        orderSupportLink.style.display = 'inline-flex';
         resultCreated.textContent = formatDate(cached.created_at);
         resultUpdated.textContent = formatDate(cached.updated_at);
         trackingResult.style.display = 'block';
@@ -986,15 +951,10 @@
       resultStatus.className = `status-chip ${statusClass(request.status)}`;
     }
     renderStatusTimeline(request.status);
-    updateOrderSupportLink(request);
     if (resultUpdated) resultUpdated.textContent = formatDate(request.updated_at);
   });
 
   window.addEventListener('bakuservis:order-message', (event) => {
-    const trackingCode = event.detail?.tracking_code;
-    if (trackingCode && cachedTrackingRequest?.tracking_code === trackingCode) {
-      void loadOrderSupportMessages(trackingCode);
-    }
   });
 
   payButton?.addEventListener('click', openPaymentModal);
@@ -1003,6 +963,7 @@
     const sessionId = localStorage.getItem('bakuservis-chat-session') || `customer-${Date.now()}`;
     localStorage.setItem('bakuservis-chat-session', sessionId);
     const identity = getStoredCustomerIdentity();
+    let chatTrackingCode = '';
 
     const chatToggleBtn = document.getElementById('chat-toggle-btn');
     const chatPanel = document.getElementById('chat-panel');
@@ -1010,7 +971,6 @@
     const chatInput = document.getElementById('customer-chat-input');
     const chatSend = document.getElementById('customer-chat-send');
     const closeChat = document.getElementById('chat-close');
-    const greetingText = 'Salam! Baku Servis peşəkar texniki dəstək mərkəzinə xoş gəlmisiniz. Sizə necə kömək edə bilərəm? 🛠️';
 
     function setChatOpen(isOpen) {
       if (!chatPanel) return;
@@ -1022,33 +982,6 @@
       }
       if (isOpen && chatInput) {
         requestAnimationFrame(() => chatInput.focus({ preventScroll: true }));
-      }
-    }
-
-    async function showInitialGreeting() {
-      if (!chatPanel || !chatMessages) return;
-      const alreadyShown = localStorage.getItem('bakuservis-chat-greeting-shown') === 'true';
-      if (alreadyShown) return;
-
-      try {
-        const response = await fetch('/api/chat/send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            session_id: sessionId,
-            sender_type: 'bot',
-            message: greetingText,
-            customer_name: identity.name,
-            customer_phone: identity.phone
-          })
-        });
-
-        if (response.ok) {
-          localStorage.setItem('bakuservis-chat-greeting-shown', 'true');
-          await loadChatHistory();
-        }
-      } catch (error) {
-        console.error('initial bot greeting error:', error);
       }
     }
 
@@ -1089,9 +1022,13 @@
       const isVisible = chatPanel && chatPanel.style.display !== 'none';
       const nextState = !isVisible;
       setChatOpen(nextState);
-      if (nextState) {
-        await showInitialGreeting();
-      }
+      if (nextState) await loadChatHistory();
+    });
+
+    window.addEventListener('bakuservis:open-chat', (event) => {
+      chatTrackingCode = String(event.detail?.trackingCode || '');
+      setChatOpen(true);
+      void loadChatHistory();
     });
 
     chatInput?.addEventListener('focus', () => setChatOpen(true));
@@ -1114,7 +1051,8 @@
             sender_type: 'customer',
             message,
             customer_name: identity.name,
-            customer_phone: identity.phone
+            customer_phone: identity.phone,
+            tracking_code: chatTrackingCode
           })
         });
         await loadChatHistory();
