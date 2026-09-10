@@ -647,6 +647,10 @@ async function ensurePostgresDatabase() {
   await run('ALTER TABLE requests ADD COLUMN IF NOT EXISTS customer_email TEXT');
   await run('ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_email TEXT');
   for (const table of ['requests', 'orders']) {
+    await run(`ALTER TABLE ${table} ALTER COLUMN status DROP DEFAULT`);
+    await run(`ALTER TABLE ${table} ALTER COLUMN status TYPE TEXT USING status::text`);
+    await run(`UPDATE ${table} SET status = ? WHERE status NOT IN (${REQUEST_STATUSES.map(() => '?').join(', ')})`, [REQUEST_STATUSES[0], ...REQUEST_STATUSES]);
+    await run(`ALTER TABLE ${table} ALTER COLUMN status SET DEFAULT 'Sifariş qəbul edildi'`);
     for (const [legacyStatus, currentStatus] of REQUEST_STATUS_ALIASES) {
       await run(`UPDATE ${table} SET status = ? WHERE status = ?`, [currentStatus, legacyStatus]);
     }
