@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let selectedRequestId = null;
   let currentChatSession = null;
+  let adminChatMessagesState = [];
   let currentUserRole = 'ADMIN';
   const REQUEST_STATUSES = [
     'Sifariş qəbul edildi',
@@ -497,24 +498,29 @@ document.addEventListener('DOMContentLoaded', () => {
       if (adminChatHeader) adminChatHeader.textContent = selectedChat?.tracking_code ? `Əlaqədar Müraciət: ${selectedChat.tracking_code}` : 'Ümumi canlı chat';
       const response = await fetch(`/api/chat/history/${encodeURIComponent(sessionId)}`);
       const data = await response.json();
-      const messages = data.messages || [];
+      const messages = Array.isArray(data.messages) ? data.messages : [];
+      adminChatMessagesState = [...messages];
 
       if (!adminChatMessages) return;
-      adminChatMessages.innerHTML = messages.map((msg) => {
+      adminChatMessages.innerHTML = adminChatMessagesState.map((msg, index) => {
         const sender = String(msg.sender_type || 'customer');
         const isBot = sender === 'bot';
         const isCustomer = sender === 'customer';
         const label = isBot ? '🤖 Baku AI Bot' : isCustomer ? '🧑 Müşteri' : '👨‍💼 Baku Team';
         const className = isBot ? 'bot' : isCustomer ? 'customer' : 'admin';
+        const messageKey = String(msg.id ?? msg.message_id ?? `${msg.created_at || 'message'}-${index}`);
 
         return `
-          <div class="bubble ${className}">
+          <div class="bubble ${className}" data-message-key="${messageKey}">
             <span class="chat-badge">${label}</span>
             <div class="chat-message">${msg.message}</div>
           </div>
         `;
       }).join('');
-      adminChatMessages.scrollTop = adminChatMessages.scrollHeight;
+      requestAnimationFrame(() => {
+        adminChatMessages.scrollTop = adminChatMessages.scrollHeight;
+        adminChatMessages.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      });
     } catch (error) {
       console.error('openChat error:', error);
     }

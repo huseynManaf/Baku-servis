@@ -976,14 +976,41 @@
     const chatSend = document.getElementById('customer-chat-send');
     const closeChat = document.getElementById('chat-close');
     let chatSendInProgress = false;
+    let chatMessagesState = [];
+
+    function scrollChatToBottom() {
+      if (!chatMessages) return;
+      requestAnimationFrame(() => {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        chatMessages.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      });
+    }
+
+    function renderChatMessages(messages) {
+      chatMessagesState = [...messages];
+      if (!chatMessages) return;
+      chatMessages.innerHTML = chatMessagesState.map((msg, index) => {
+        const sender = String(msg.sender_type || 'customer');
+        const isAdmin = sender === 'admin';
+        const isBot = sender === 'bot';
+        const label = isBot ? '🤖 Baku AI' : isAdmin ? '👨‍💼 Baku Team' : '🧑 Müştəri';
+        const className = isBot ? 'bot' : isAdmin ? 'admin' : 'customer';
+        const messageKey = String(msg.id ?? msg.message_id ?? `${msg.created_at || 'message'}-${index}`);
+        return `<div class="chat-bubble ${className}" data-message-key="${messageKey}"><span class="chat-badge">${label}</span><div class="chat-message">${String(msg.message || '').replace(/\n/g, '<br>')}</div></div>`;
+      }).join('');
+      scrollChatToBottom();
+    }
+
+    function appendChatMessages(newMessages) {
+      const messagesToAdd = newMessages.filter(Boolean);
+      if (!messagesToAdd.length) return;
+      renderChatMessages([...chatMessagesState, ...messagesToAdd]);
+    }
 
     function appendChatError() {
       if (!chatMessages) return;
-      const bubble = document.createElement('div');
-      bubble.className = 'chat-bubble bot';
-      bubble.innerHTML = '<span class="chat-badge">Baku AI</span><div class="chat-message">Sistemdə xəta baş verdi, zəhmət olmasa bir az sonra yenidən cəhd edin.</div>';
-      chatMessages.appendChild(bubble);
-      chatMessages.scrollTop = chatMessages.scrollHeight;
+      const errorMessage = { id: `error-${Date.now()}`, sender_type: 'bot', message: 'Sistemdə xəta baş verdi, zəhmət olmasa bir az sonra yenidən cəhd edin.' };
+      renderChatMessages([...chatMessagesState, errorMessage]);
     }
 
     function setChatOpen(isOpen) {
@@ -1010,22 +1037,7 @@
 
         const data = await response.json();
         const messages = Array.isArray(data?.messages) ? data.messages : [];
-        chatMessages.innerHTML = messages.map((msg) => {
-          const sender = String(msg.sender_type || 'customer');
-          const isCustomer = sender === 'customer';
-          const isAdmin = sender === 'admin';
-          const isBot = sender === 'bot';
-          const label = isBot ? '🤖 Baku AI' : isAdmin ? '👨‍💼 Baku Team' : '🧑 Müşteri';
-          const className = isBot ? 'bot' : isAdmin ? 'admin' : 'customer';
-
-          return `
-            <div class="chat-bubble ${className}">
-              <span class="chat-badge">${label}</span>
-              <div class="chat-message">${String(msg.message || '').replace(/\n/g, '<br>')}</div>
-            </div>
-          `;
-        }).join('');
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+        renderChatMessages(messages);
       } catch (error) {
         console.error('loadChatHistory error:', error);
         if (chatMessages) chatMessages.innerHTML = '';
@@ -1050,6 +1062,10 @@
         requestAnimationFrame(() => chatInput.focus({ preventScroll: true }));
       }
       void loadChatHistory();
+    });
+
+    window.addEventListener('bakuservis:chat-message', (event) => {
+      if (event.detail?.session_id === sessionId) void loadChatHistory();
     });
 
     chatInput?.addEventListener('focus', () => setChatOpen(true));
@@ -1084,6 +1100,8 @@
           })
         });
         if (!response.ok) throw new Error(`Chat request failed: ${response.status}`);
+        const data = await response.json();
+        appendChatMessages([data.message, data.bot_message]);
         await loadChatHistory();
       } catch (error) {
         console.error('customer chat send error:', error);
