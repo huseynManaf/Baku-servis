@@ -46,8 +46,12 @@
   let requestSubmitting = false;
   let cachedTrackingRequest = null;
   orderSupportLink?.addEventListener('click', () => {
+    const trackingCode = orderSupportLink.dataset.trackingCode || '';
+    const text = trackingCode
+      ? `Salam, mənim ${trackingCode} nömrəli sifarişimlə/müraciətimlə bağlı sualım var.`
+      : '';
     window.dispatchEvent(new CustomEvent('bakuservis:open-chat', {
-      detail: { trackingCode: orderSupportLink.dataset.trackingCode || '' }
+      detail: { trackingCode, text, timestamp: Date.now() }
     }));
   });
   const AZERBAIJANI_PHONE_REGEX = /^(\+994|994|0)?(50|51|55|60|70|77|99)\d{7}$/;
@@ -1036,9 +1040,15 @@
     });
 
     window.addEventListener('bakuservis:open-chat', (event) => {
-      chatTrackingCode = String(event.detail?.trackingCode || '');
+      const detail = event.detail || {};
+      chatTrackingCode = String(detail.trackingCode || '');
       setChatOpen(true);
-      if (chatTrackingCode && chatInput) chatInput.value = `Salam, mənim ${chatTrackingCode} nömrəli sifarişimlə/müraciətimlə bağlı sualım var.`;
+      if (chatInput) {
+        chatInput.value = String(detail.text || (chatTrackingCode
+          ? `Salam, mənim ${chatTrackingCode} nömrəli sifarişimlə/müraciətimlə bağlı sualım var.`
+          : ''));
+        requestAnimationFrame(() => chatInput.focus({ preventScroll: true }));
+      }
       void loadChatHistory();
     });
 
