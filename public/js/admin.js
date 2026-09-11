@@ -79,6 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function showView(target) {
+    if (!target) return;
     if (requestsView) requestsView.style.display = target === 'requests' ? 'block' : 'none';
     if (servicesView) servicesView.style.display = target === 'services' ? 'block' : 'none';
     if (chatsView) chatsView.style.display = target === 'chats' ? 'block' : 'none';
@@ -88,6 +89,12 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.nav-item').forEach((item) => {
       item.classList.toggle('active', item.dataset.view === target);
     });
+    if (window.location.hash !== `#${target}`) window.history.replaceState(null, '', `#${target}`);
+  }
+
+  function showHashView() {
+    const target = window.location.hash.replace(/^#/, '');
+    if (['requests', 'services', 'chats', 'users', 'detail'].includes(target)) showView(target);
   }
 
   function updateStats(requests) {
@@ -122,7 +129,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (loginView) loginView.style.display = 'none';
         if (adminView) adminView.style.display = 'grid';
         if (adminUser) adminUser.textContent = `İstifadəçi: ${data.username}`;
-        showView('requests');
+        const initialView = ['requests', 'services', 'chats', 'users', 'detail'].includes(window.location.hash.replace(/^#/, ''))
+          ? window.location.hash.replace(/^#/, '')
+          : 'requests';
+        showView(initialView);
         await loadRequests();
         await loadServices();
         await loadAdminChats();
@@ -187,6 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (view === 'chats') await loadAdminChats();
     });
   });
+  window.addEventListener('hashchange', showHashView);
 
   function redirectToAdminLogin() {
     const currentPath = window.location.pathname;

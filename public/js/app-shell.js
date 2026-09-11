@@ -12,6 +12,12 @@
   const links = [...document.querySelectorAll('[data-screen-link]')];
   const screens = [...document.querySelectorAll('.app-screen[data-screen]')];
 
+  function normalizeScreen(screen) {
+    if (screen === 'tracking' || screen === 'track') return 'my-requests';
+    if (screen === 'request-panel' || screen === 'order-section') return 'request';
+    return screen;
+  }
+
   function closeDrawer() {
     drawer?.classList.remove('is-open');
     drawer?.setAttribute('aria-hidden', 'true');
@@ -20,13 +26,15 @@
   }
 
   function setScreen(screen) {
+    screen = normalizeScreen(screen);
     if (!screen) return;
-    if (screen === 'tracking') screen = 'my-requests';
     body.classList.add('app-screen-mode');
     body.classList.toggle('form-focus-mode', ['request', 'my-requests', 'contact'].includes(screen));
     screens.forEach((item) => item.dataset.screenActive = item.dataset.screen === screen ? 'true' : 'false');
     links.forEach((link) => link.classList.toggle('is-active', link.dataset.screenLink === screen || (screen === 'my-requests' && link.dataset.screenLink === 'tracking')));
     localStorage.setItem('bakuservis-screen', screen);
+    const hash = screen === 'home' ? '#home' : `#${screen}`;
+    if (window.location.hash !== hash) window.history.replaceState(null, '', hash);
     window.dispatchEvent(new CustomEvent('bakuservis:screen', { detail: screen }));
     closeDrawer();
     const target = document.querySelector(`[data-screen="${screen}"]`);
@@ -50,6 +58,11 @@
     }
   }));
 
+  window.addEventListener('hashchange', () => {
+    const hashScreen = normalizeScreen(window.location.hash.replace(/^#/, ''));
+    if (hashScreen) setScreen(hashScreen);
+  });
+
   document.querySelectorAll('[data-open-chat]').forEach((link) => {
     link.addEventListener('click', (event) => {
       event.preventDefault();
@@ -57,7 +70,8 @@
     });
   });
 
-  const initialScreen = isNativeApp ? 'home' : (localStorage.getItem('bakuservis-screen') || 'home');
+  const hashScreen = normalizeScreen(window.location.hash.replace(/^#/, ''));
+  const initialScreen = isNativeApp ? (hashScreen || 'home') : (hashScreen || localStorage.getItem('bakuservis-screen') || 'home');
   setScreen(initialScreen);
 
   if ('serviceWorker' in navigator) {

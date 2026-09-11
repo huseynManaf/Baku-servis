@@ -1182,3 +1182,17 @@ select.status-select{background:var(--ink-900);border:1px solid var(--line);colo
     padding-bottom:env(safe-area-inset-bottom, 16px) !important;
   }
 }
+
+button,
+a,
+input,
+select,
+textarea,
+[role="button"],
+[data-screen-link],
+[data-view],
+[data-open-chat]{
+  pointer-events:auto !important;
+  cursor:pointer;
+  touch-action:manipulation;
+}
