@@ -983,11 +983,11 @@
       if (!chatMessages) return;
       requestAnimationFrame(() => {
         chatMessages.scrollTop = chatMessages.scrollHeight;
-        chatMessages.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        chatMessages.lastElementChild?.scrollIntoView({ behavior: 'auto', block: 'end' });
         window.setTimeout(() => {
           chatMessages.scrollTop = chatMessages.scrollHeight;
-          chatMessages.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-        }, 50);
+          chatMessages.lastElementChild?.scrollIntoView({ behavior: 'auto', block: 'end' });
+        }, 100);
       });
     }
 
