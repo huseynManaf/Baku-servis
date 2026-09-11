@@ -995,13 +995,14 @@
       chatMessagesState = [...messages];
       if (!chatMessages) return;
       chatMessages.innerHTML = chatMessagesState.map((msg, index) => {
-        const sender = String(msg.sender_type || 'customer');
+        const sender = String(msg.sender_type || msg.sender || 'customer');
         const isAdmin = sender === 'admin';
         const isBot = sender === 'bot';
         const label = isBot ? '🤖 Baku AI' : isAdmin ? '👨‍💼 Baku Team' : '🧑 Müştəri';
         const className = isBot ? 'bot' : isAdmin ? 'admin' : 'customer';
         const messageKey = String(msg.id ?? msg.message_id ?? `${msg.created_at || 'message'}-${index}`);
-        return `<div class="chat-bubble ${className}" data-message-key="${messageKey}"><span class="chat-badge">${label}</span><div class="chat-message">${String(msg.message || '').replace(/\n/g, '<br>')}</div></div>`;
+        const messageText = String(msg.message ?? msg.text ?? msg.content ?? '');
+        return `<div class="chat-bubble ${className}" data-message-key="${messageKey}"><span class="chat-badge">${label}</span><div class="chat-message">${messageText.replace(/\n/g, '<br>')}</div></div>`;
       }).join('');
       scrollChatToBottom();
     }
@@ -1099,6 +1100,14 @@
       chatSend.disabled = true;
       if (chatInput) chatInput.disabled = true;
       if (chatInput) chatInput.value = '';
+      appendChatMessages([{
+        id: `pending-${Date.now()}`,
+        sender_type: 'customer',
+        sender: 'customer',
+        message,
+        text: message,
+        created_at: new Date().toISOString()
+      }]);
       const controller = new AbortController();
       const timeoutId = window.setTimeout(() => controller.abort(), 15000);
       try {
@@ -1117,8 +1126,6 @@
           })
         });
         if (!response.ok) throw new Error(`Chat request failed: ${response.status}`);
-        const data = await response.json();
-        appendChatMessages([data.message, data.bot_message]);
         await loadChatHistory();
       } catch (error) {
         console.error('customer chat send error:', error);

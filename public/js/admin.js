@@ -503,17 +503,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (!adminChatMessages) return;
       adminChatMessages.innerHTML = adminChatMessagesState.map((msg, index) => {
-        const sender = String(msg.sender_type || 'customer');
+        const sender = String(msg.sender_type || msg.sender || 'customer');
         const isBot = sender === 'bot';
         const isCustomer = sender === 'customer';
         const label = isBot ? '🤖 Baku AI Bot' : isCustomer ? '🧑 Müşteri' : '👨‍💼 Baku Team';
         const className = isBot ? 'bot' : isCustomer ? 'customer' : 'admin';
         const messageKey = String(msg.id ?? msg.message_id ?? `${msg.created_at || 'message'}-${index}`);
+        const messageText = String(msg.message ?? msg.text ?? msg.content ?? '');
 
         return `
           <div class="bubble ${className}" data-message-key="${messageKey}">
             <span class="chat-badge">${label}</span>
-            <div class="chat-message">${msg.message}</div>
+            <div class="chat-message">${messageText.replace(/\n/g, '<br>')}</div>
           </div>
         `;
       }).join('');
