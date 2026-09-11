@@ -256,8 +256,13 @@
           </div>
         </section>
 
-        <section id="detail-view" style="display:none; margin-top: 18px;">
-          <div class="detail-grid">
+        <section id="detail-view" class="admin-detail-view" style="display:none; margin-top: 18px;" role="dialog" aria-modal="true" aria-labelledby="detail-view-title" aria-hidden="true">
+          <div class="admin-detail-sheet">
+            <div class="admin-detail-header">
+              <h2 id="detail-view-title">Müraciət məlumatı</h2>
+              <button type="button" id="close-detail-btn" class="btn btn-ghost admin-detail-close" aria-label="Müraciət məlumatını bağla">×</button>
+            </div>
+            <div class="detail-grid">
             <div class="card">
               <h3>Müraciət məlumatı</h3>
 
@@ -345,6 +350,7 @@
 
               <button id="save-request-btn" class="btn btn-primary btn-block">Yadda saxla</button>
               <button id="back-to-list-btn" class="btn btn-outline btn-block" style="margin-top: 10px;">Siyahıya qayıt</button>
+            </div>
             </div>
           </div>
         </section>

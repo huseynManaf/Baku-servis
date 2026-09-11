@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const servicesView = document.getElementById('services-view');
   const chatsView = document.getElementById('chats-view');
   const detailView = document.getElementById('detail-view');
+  const closeDetailButton = document.getElementById('close-detail-btn');
   const serviceModal = document.getElementById('service-modal');
   const statTotal = document.getElementById('stat-total');
   const statPending = document.getElementById('stat-pending');
@@ -85,6 +86,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (chatsView) chatsView.style.display = target === 'chats' ? 'block' : 'none';
     if (detailView) detailView.style.display = target === 'detail' ? 'block' : 'none';
     if (usersView) usersView.style.display = target === 'users' ? 'block' : 'none';
+    if (detailView) {
+      const isDetail = target === 'detail';
+      detailView.setAttribute('aria-hidden', String(!isDetail));
+    }
 
     document.querySelectorAll('.nav-item').forEach((item) => {
       item.classList.toggle('active', item.dataset.view === target);
@@ -289,6 +294,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       showView('detail');
+      requestAnimationFrame(() => {
+        detailView?.querySelector('input, select, textarea')?.focus({ preventScroll: true });
+      });
     } catch (error) {
       console.error('openRequestDetail error:', error);
     }
@@ -333,6 +341,22 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('back-to-list-btn')?.addEventListener('click', async () => {
     showView('requests');
     await loadRequests();
+  });
+
+  async function closeRequestDetail() {
+    selectedRequestId = null;
+    showView('requests');
+    await loadRequests();
+  }
+
+  closeDetailButton?.addEventListener('click', () => void closeRequestDetail());
+  detailView?.addEventListener('click', (event) => {
+    if (event.target === detailView) void closeRequestDetail();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && detailView?.getAttribute('aria-hidden') === 'false') {
+      void closeRequestDetail();
+    }
   });
 
   function openServiceModal(service = null) {

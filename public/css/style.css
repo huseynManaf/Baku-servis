@@ -1059,6 +1059,10 @@ tr.clickable:hover{background:var(--ink-700);}
 .login-card{width:100%;max-width:380px;background:var(--ink-800);border:1px solid var(--line);border-radius:var(--radius-m);padding:32px;}
 .login-card .brand{justify-content:center;margin-bottom:22px;}
 .detail-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:20px;align-items:start;}
+.admin-detail-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px;}
+.admin-detail-header h2{margin:0;font-size:22px;}
+.admin-detail-close{flex:0 0 auto;min-width:44px;min-height:44px;padding:8px 12px;font-size:24px;line-height:1;}
+.admin-detail-sheet{width:100%;}
 .card{background:var(--ink-800);border:1px solid var(--line);border-radius:var(--radius-m);padding:20px;margin-bottom:18px;}
 .card h4{font-size:14px;margin-bottom:14px;}
 .kv{display:flex;justify-content:space-between;font-size:13.5px;padding:6px 0;border-bottom:1px solid var(--ink-600);}
@@ -1274,6 +1278,53 @@ textarea,
   .chat-admin-layout{display:flex !important;flex-direction:column !important;}
   .admin-chat-list{max-height:240px;}
   .admin-chat-messages{max-height:50vh;min-height:180px;}
+  .admin-detail-view[aria-hidden="true"]{display:none !important;}
+  .admin-detail-view[aria-hidden="false"]{
+    position:fixed !important;
+    inset:0 !important;
+    z-index:50 !important;
+    display:flex !important;
+    align-items:flex-end;
+    justify-content:center;
+    padding:16px;
+    margin:0 !important;
+    background:rgba(15,23,42,.8);
+    backdrop-filter:blur(4px);
+    overflow:hidden;
+  }
+  .admin-detail-sheet{
+    width:100%;
+    max-height:85vh;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    padding:16px;
+    background:var(--ink-800);
+    border:1px solid var(--line);
+    border-radius:16px 16px 8px 8px;
+    box-shadow:0 20px 50px rgba(2,6,23,.5);
+  }
+  .admin-detail-header{
+    position:sticky;
+    top:-16px;
+    z-index:2;
+    margin:-16px -16px 16px;
+    padding:14px 16px;
+    background:var(--ink-800);
+    border-bottom:1px solid var(--line);
+  }
+  .admin-detail-header h2{font-size:19px;}
+  .admin-detail-close{width:auto !important;min-width:44px;}
+  .admin-detail-sheet .detail-grid{display:grid;grid-template-columns:1fr;gap:12px;}
+  .admin-detail-sheet input,
+  .admin-detail-sheet select,
+  .admin-detail-sheet textarea{
+    width:100% !important;
+    max-width:100%;
+    padding:12px !important;
+    font-size:16px !important;
+    box-sizing:border-box;
+  }
+  .admin-detail-sheet .btn{width:100%;min-height:44px;}
   .admin-main input,
   .admin-main select,
   .admin-main textarea,
