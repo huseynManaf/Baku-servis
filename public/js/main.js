@@ -977,12 +977,17 @@
     const closeChat = document.getElementById('chat-close');
     let chatSendInProgress = false;
     let chatMessagesState = [];
+    let chatRenderKey = 0;
 
     function scrollChatToBottom() {
       if (!chatMessages) return;
       requestAnimationFrame(() => {
         chatMessages.scrollTop = chatMessages.scrollHeight;
         chatMessages.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        window.setTimeout(() => {
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+          chatMessages.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }, 50);
       });
     }
 
@@ -1002,9 +1007,19 @@
     }
 
     function appendChatMessages(newMessages) {
-      const messagesToAdd = newMessages.filter(Boolean);
+      const messagesToAdd = newMessages.filter(Boolean).map((message, index) => ({
+        ...message,
+        id: message.id ?? Date.now() + index
+      }));
       if (!messagesToAdd.length) return;
       renderChatMessages([...chatMessagesState, ...messagesToAdd]);
+    }
+
+    function resetChatState() {
+      chatMessagesState = [];
+      chatRenderKey += 1;
+      if (chatPanel) chatPanel.dataset.chatRenderKey = String(chatRenderKey);
+      if (chatMessages) chatMessages.innerHTML = '';
     }
 
     function appendChatError() {
@@ -1015,6 +1030,7 @@
 
     function setChatOpen(isOpen) {
       if (!chatPanel) return;
+      if (!isOpen) resetChatState();
       chatPanel.style.display = isOpen ? 'block' : 'none';
       chatPanel.classList.toggle('is-open', isOpen);
       chatPanel.setAttribute('aria-hidden', String(!isOpen));
@@ -1054,6 +1070,7 @@
     window.addEventListener('bakuservis:open-chat', (event) => {
       const detail = event.detail || {};
       chatTrackingCode = String(detail.trackingCode || '');
+      resetChatState();
       setChatOpen(true);
       if (chatInput) {
         chatInput.value = String(detail.text || (chatTrackingCode
