@@ -971,6 +971,16 @@
     const chatInput = document.getElementById('customer-chat-input');
     const chatSend = document.getElementById('customer-chat-send');
     const closeChat = document.getElementById('chat-close');
+    let chatSendInProgress = false;
+
+    function appendChatError() {
+      if (!chatMessages) return;
+      const bubble = document.createElement('div');
+      bubble.className = 'chat-bubble bot';
+      bubble.innerHTML = '<span class="chat-badge">Baku AI</span><div class="chat-message">Sistemdə xəta baş verdi, zəhmət olmasa bir az sonra yenidən cəhd edin.</div>';
+      chatMessages.appendChild(bubble);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
 
     function setChatOpen(isOpen) {
       if (!chatPanel) return;
@@ -1039,14 +1049,21 @@
     });
 
     chatSend?.addEventListener('click', async () => {
+      if (chatSendInProgress) return;
       const message = (chatInput?.value || '').trim();
       if (!message) return;
+      chatSendInProgress = true;
+      chatSend.disabled = true;
+      if (chatInput) chatInput.disabled = true;
       if (chatInput) chatInput.value = '';
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 15000);
       try {
         const identity = getStoredCustomerIdentity();
-        await fetch('/api/chat/send', {
+        const response = await fetch('/api/chat/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
           body: JSON.stringify({
             session_id: sessionId,
             sender_type: 'customer',
@@ -1056,9 +1073,16 @@
             tracking_code: chatTrackingCode
           })
         });
+        if (!response.ok) throw new Error(`Chat request failed: ${response.status}`);
         await loadChatHistory();
       } catch (error) {
         console.error('customer chat send error:', error);
+        appendChatError();
+      } finally {
+        window.clearTimeout(timeoutId);
+        chatSendInProgress = false;
+        chatSend.disabled = false;
+        if (chatInput) chatInput.disabled = false;
       }
     });
 

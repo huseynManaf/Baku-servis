@@ -1506,7 +1506,7 @@ app.post('/api/chat/send', async (req, res) => {
       let botRow = null;
       if (shouldWelcome) {
         const sessionHistory = await all('SELECT * FROM chat_messages WHERE session_id = ? ORDER BY created_at ASC', [sessionId]);
-        botReply = getKnowledgeBaseReply(message, sessionHistory);
+        botReply = getKnowledgeBaseReply(message, sessionHistory.slice(-6));
         const botSaved = await run(
           'INSERT INTO chat_messages (session_id, tracking_code, sender_type, message, customer_name, customer_phone, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
           [sessionId, relatedTrackingCode || null, 'bot', botReply, resolvedCustomerName, resolvedCustomerPhone, nowIso()]
