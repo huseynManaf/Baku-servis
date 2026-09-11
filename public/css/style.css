@@ -1126,12 +1126,13 @@ select.status-select{background:var(--ink-900);border:1px solid var(--line);colo
 }
 
 #chat-panel{
-  display:flex !important;
   flex-direction:column !important;
   height:500px !important;
   max-height:80vh !important;
   overflow:hidden !important;
 }
+#chat-panel.is-open{display:flex !important;}
+#chat-panel[style*="display: none"]{display:none !important;}
 #chat-panel .chat-log{
   display:flex !important;
   flex:1 1 auto !important;
