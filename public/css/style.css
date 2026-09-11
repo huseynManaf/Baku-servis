@@ -1225,7 +1225,9 @@ textarea,
     border-right:0 !important;
     border-bottom:1px solid var(--line);
     -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
   }
+  .admin-side::-webkit-scrollbar{display:none;}
   .admin-side .brand{display:none !important;}
   .admin-side a.nav-item{
     flex:0 0 auto;
@@ -1272,4 +1274,26 @@ textarea,
   .chat-admin-layout{display:flex !important;flex-direction:column !important;}
   .admin-chat-list{max-height:240px;}
   .admin-chat-messages{max-height:50vh;min-height:180px;}
+  .admin-main input,
+  .admin-main select,
+  .admin-main textarea,
+  .admin-main button:not(.nav-item){
+    width:100%;
+    max-width:100%;
+    min-height:44px;
+    box-sizing:border-box;
+  }
+  .admin-main input,
+  .admin-main select,
+  .admin-main textarea{font-size:16px !important;}
+  .chat-admin-layout .chat-input-row{flex-direction:column;align-items:stretch;}
+  .status-badge{
+    display:inline-flex;
+    align-items:center;
+    white-space:nowrap;
+    font-size:12px;
+    line-height:1.2;
+    padding:4px 8px;
+    border-radius:6px;
+  }
 }
