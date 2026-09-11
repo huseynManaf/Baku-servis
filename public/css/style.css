@@ -818,6 +818,7 @@ body.app-screen-mode{padding-bottom:76px;}
 @media (max-width:900px){
   .admin-shell{display:block;}
   .admin-side{display:flex;flex-direction:row;gap:6px;overflow-x:auto;padding:10px;border-right:none;border-bottom:1px solid var(--line);}
+}
 
 /* Mobile map search: keep the field touch-friendly and clear of the map. */
 @media (max-width:768px){
@@ -1196,4 +1197,79 @@ textarea,
   pointer-events:auto !important;
   cursor:pointer;
   touch-action:manipulation;
+}
+
+@media (max-width:768px){
+  body:has(.admin-shell){
+    padding-bottom:0 !important;
+    overflow-x:hidden !important;
+  }
+  .admin-shell{
+    display:block !important;
+    width:100% !important;
+    min-height:100dvh;
+    overflow-x:hidden;
+  }
+  .admin-side{
+    position:sticky;
+    top:0;
+    z-index:20;
+    display:flex !important;
+    flex-direction:row !important;
+    align-items:center;
+    width:100%;
+    min-width:0;
+    overflow-x:auto;
+    padding:8px 10px !important;
+    gap:6px !important;
+    border-right:0 !important;
+    border-bottom:1px solid var(--line);
+    -webkit-overflow-scrolling:touch;
+  }
+  .admin-side .brand{display:none !important;}
+  .admin-side a.nav-item{
+    flex:0 0 auto;
+    min-width:max-content;
+    width:auto !important;
+    white-space:nowrap;
+    padding:10px 12px;
+    font-size:13px;
+    margin-bottom:0 !important;
+    pointer-events:auto !important;
+  }
+  .admin-side > div:last-child{
+    flex:0 0 auto;
+    margin:0 0 0 auto !important;
+    padding-left:4px;
+  }
+  .admin-side > div:last-child .btn{white-space:nowrap;min-height:40px;}
+  .admin-main{
+    width:100% !important;
+    max-width:100% !important;
+    min-width:0 !important;
+    padding:16px 12px !important;
+    overflow-x:hidden;
+  }
+  .admin-top{margin-bottom:16px;}
+  .admin-top h2{font-size:22px;}
+  .admin-top > div{width:100%;justify-content:space-between;}
+  .stat-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    gap:8px !important;
+    margin-bottom:16px;
+  }
+  .stat-card{padding:12px 10px;min-width:0;}
+  .stat-card b{font-size:22px;}
+  .table-wrap{
+    width:100%;
+    max-width:100%;
+    overflow-x:auto !important;
+    -webkit-overflow-scrolling:touch;
+  }
+  .table-wrap table{min-width:760px;}
+  .table-wrap th,.table-wrap td{padding:10px 9px;font-size:12px;white-space:nowrap;}
+  .card{padding:14px !important;}
+  .chat-admin-layout{display:flex !important;flex-direction:column !important;}
+  .admin-chat-list{max-height:240px;}
+  .admin-chat-messages{max-height:50vh;min-height:180px;}
 }
