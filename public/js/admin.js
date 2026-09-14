@@ -16,6 +16,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const statPending = document.getElementById('stat-pending');
   const statInWork = document.getElementById('stat-inwork');
   const statReady = document.getElementById('stat-ready');
+  const statSiteVisits = document.getElementById('stat-site-visits');
+  const statUniqueVisitors = document.getElementById('stat-unique-visitors');
+  const popularPagesList = document.getElementById('popular-pages-list');
+  const recentVisitsList = document.getElementById('recent-visits-list');
+  const analyticsUpdated = document.getElementById('analytics-updated');
   const adminChatList = document.getElementById('admin-chat-list');
   const adminChatMessages = document.getElementById('admin-chat-messages');
   const adminChatInput = document.getElementById('admin-chat-input');
@@ -79,6 +84,36 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${number.toFixed(2)} ₼`;
   }
 
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>'"]/g, (character) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+    })[character]);
+  }
+
+  async function loadAnalytics() {
+    try {
+      const response = await fetch('/api/admin/analytics');
+      if (!response.ok) throw new Error(`Analytics request failed: ${response.status}`);
+      const data = await response.json();
+      if (statSiteVisits) statSiteVisits.textContent = Number(data.totalVisits || 0).toLocaleString('az-AZ');
+      if (statUniqueVisitors) statUniqueVisitors.textContent = `${Number(data.uniqueVisitors || 0).toLocaleString('az-AZ')} unikal ziyarətçi`;
+      if (popularPagesList) {
+        popularPagesList.innerHTML = (data.popularPages || []).length
+          ? data.popularPages.map((page) => `<div class="analytics-row"><span>${escapeHtml(page.path)}</span><strong>${Number(page.visits || 0).toLocaleString('az-AZ')}</strong></div>`).join('')
+          : '<span class="small">Hələ məlumat yoxdur.</span>';
+      }
+      if (recentVisitsList) {
+        recentVisitsList.innerHTML = (data.recentActivity || []).length
+          ? data.recentActivity.map((visit) => `<div class="analytics-row"><span>${escapeHtml(visit.path)}</span><time>${formatDateTime(visit.created_at)}</time></div>`).join('')
+          : '<span class="small">Hələ məlumat yoxdur.</span>';
+      }
+      if (analyticsUpdated) analyticsUpdated.textContent = `Yeniləndi: ${formatDateTime(new Date())}`;
+    } catch (error) {
+      console.error('loadAnalytics error:', error);
+      if (analyticsUpdated) analyticsUpdated.textContent = 'Analitika əlçatan deyil';
+    }
+  }
+
   function showView(target) {
     if (!target) return;
     if (requestsView) requestsView.style.display = target === 'requests' ? 'block' : 'none';
@@ -139,6 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
           : 'requests';
         showView(initialView);
         await loadRequests();
+        await loadAnalytics();
         await loadServices();
         await loadAdminChats();
         if (isSuperAdmin) await loadUsers();

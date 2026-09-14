@@ -74,6 +74,17 @@
   const initialScreen = hashScreen || 'home';
   setScreen(initialScreen);
 
+  const visitPayload = JSON.stringify({ path: `${window.location.pathname}${window.location.hash}` || '/' });
+  try {
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon('/api/site-visits', new Blob([visitPayload], { type: 'application/json' }));
+    } else {
+      void fetch('/api/site-visits', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: visitPayload, keepalive: true });
+    }
+  } catch (error) {
+    console.debug('site visit tracking skipped:', error);
+  }
+
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').then(async (registration) => {
       window.BakuServisPush = {

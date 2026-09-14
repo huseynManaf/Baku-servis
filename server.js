@@ -677,6 +677,9 @@ async function ensurePostgresDatabase() {
   await run('CREATE INDEX IF NOT EXISTS idx_requests_customer_phone ON requests (customer_phone)');
   await run('CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders (created_at DESC)');
   await run('CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages (session_id, created_at)');
+  await run(`CREATE TABLE IF NOT EXISTS site_visits (id SERIAL PRIMARY KEY, path TEXT NOT NULL, ip_hash TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
+  await run('CREATE INDEX IF NOT EXISTS idx_site_visits_created_at ON site_visits (created_at DESC)');
+  await run('CREATE INDEX IF NOT EXISTS idx_site_visits_path ON site_visits (path)');
 
   const passwordHash = bcrypt.hashSync(ADMIN_PASSWORD, 10);
   const user = await get('SELECT * FROM users WHERE LOWER(email) = LOWER(?) OR LOWER(username) = LOWER(?) LIMIT 1', [ADMIN_USERNAME, ADMIN_USERNAME]);
@@ -783,6 +786,25 @@ app.get('/download', (req, res) => {
       res.status(500).send('APK yüklənə bilmədi.');
     }
   });
+});
+
+function getVisitIpHash(req) {
+  const forwardedFor = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  const ip = forwardedFor || String(req.socket.remoteAddress || req.ip || 'unknown');
+  const salt = process.env.ANALYTICS_HASH_SALT || process.env.SESSION_SECRET || 'bakuservis-analytics-salt';
+  return crypto.createHash('sha256').update(`${salt}:${ip}`).digest('hex');
+}
+
+app.post('/api/site-visits', async (req, res) => {
+  try {
+    const rawPath = String(req.body?.path || '/').trim();
+    const visitPath = rawPath.startsWith('/') ? rawPath.slice(0, 300) : `/${rawPath.slice(0, 299)}`;
+    await run('INSERT INTO site_visits (path, ip_hash, created_at) VALUES (?, ?, ?)', [visitPath || '/', getVisitIpHash(req), nowIso()]);
+    return res.status(204).end();
+  } catch (error) {
+    console.error('POST /api/site-visits error:', error);
+    return res.status(204).end();
+  }
 });
 
 app.get('/health', (req, res) => {
@@ -948,6 +970,23 @@ app.get('/api/admin/services', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('GET /api/admin/services error:', error);
     return res.status(500).json({ error: 'Xidmətlər yüklənə bilmədi.' });
+  }
+});
+
+app.get('/api/admin/analytics', requireAdmin, async (req, res) => {
+  try {
+    const totals = await get('SELECT COUNT(*)::int AS total_visits, COUNT(DISTINCT ip_hash)::int AS unique_visitors FROM site_visits');
+    const popularPages = await all('SELECT path, COUNT(*)::int AS visits FROM site_visits GROUP BY path ORDER BY visits DESC, path ASC LIMIT 6');
+    const recentActivity = await all('SELECT path, created_at FROM site_visits ORDER BY created_at DESC LIMIT 12');
+    return res.json({
+      totalVisits: Number(totals?.total_visits || 0),
+      uniqueVisitors: Number(totals?.unique_visitors || 0),
+      popularPages,
+      recentActivity
+    });
+  } catch (error) {
+    console.error('GET /api/admin/analytics error:', error);
+    return res.status(500).json({ error: 'Analitika yüklənə bilmədi.' });
   }
 });
 
