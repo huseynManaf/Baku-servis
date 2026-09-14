@@ -97,7 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!response.ok) throw new Error(`Analytics request failed: ${response.status}`);
       const data = await response.json();
       if (statSiteVisits) statSiteVisits.textContent = Number(data.totalVisits || 0).toLocaleString('az-AZ');
-      if (statUniqueVisitors) statUniqueVisitors.textContent = `${Number(data.uniqueVisitors || 0).toLocaleString('az-AZ')} unikal ziyarətçi`;
+      if (statUniqueVisitors) statUniqueVisitors.textContent = `${Number(data.uniqueVisitors || 0).toLocaleString('az-AZ')} Unikal Ziyarətçilər`;
       if (popularPagesList) {
         popularPagesList.innerHTML = (data.popularPages || []).length
           ? data.popularPages.map((page) => `<div class="analytics-row"><span>${escapeHtml(page.path)}</span><strong>${Number(page.visits || 0).toLocaleString('az-AZ')}</strong></div>`).join('')
