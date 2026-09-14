@@ -71,7 +71,7 @@
   });
 
   const hashScreen = normalizeScreen(window.location.hash.replace(/^#/, ''));
-  const initialScreen = isNativeApp ? (hashScreen || 'home') : (hashScreen || localStorage.getItem('bakuservis-screen') || 'home');
+  const initialScreen = hashScreen || 'home';
   setScreen(initialScreen);
 
   if ('serviceWorker' in navigator) {
