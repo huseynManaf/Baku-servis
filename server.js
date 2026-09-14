@@ -975,7 +975,7 @@ app.get('/api/admin/services', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/analytics', requireAdmin, async (req, res) => {
   try {
-    const totals = await get('SELECT COUNT(*)::int AS total_visits, COUNT(DISTINCT ip_hash)::int AS unique_visitors FROM site_visits');
+    const totals = await get("SELECT COUNT(*)::int AS total_visits, COUNT(DISTINCT ip_hash || ':' || DATE(created_at)::text)::int AS unique_visitors FROM site_visits");
     const popularPages = await all('SELECT path, COUNT(*)::int AS visits FROM site_visits GROUP BY path ORDER BY visits DESC, path ASC LIMIT 6');
     const recentActivity = await all('SELECT path, created_at FROM site_visits ORDER BY created_at DESC LIMIT 12');
     return res.json({
@@ -1319,6 +1319,19 @@ app.get('/api/admin/requests/:id', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('GET /api/admin/requests/:id error:', error);
     return res.status(500).json({ error: 'Müraciət detalları yüklənə bilmədi.' });
+  }
+});
+
+app.delete('/api/admin/requests/:id', requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Müraciət ID-si yanlışdır.' });
+    const result = await run('DELETE FROM requests WHERE id = ?', [id]);
+    if (!result.changes) return res.status(404).json({ error: 'Müraciət tapılmadı.' });
+    return res.json({ ok: true, id });
+  } catch (error) {
+    console.error('DELETE /api/admin/requests/:id error:', error);
+    return res.status(500).json({ error: 'Müraciət silinə bilmədi.' });
   }
 });
 

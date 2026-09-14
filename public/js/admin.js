@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const usersTable = document.getElementById('users-table');
 
   let selectedRequestId = null;
+  let requestsState = [];
   let currentChatSession = null;
   let adminChatMessagesState = [];
   let currentUserRole = 'ADMIN';
@@ -150,6 +151,52 @@ document.addEventListener('DOMContentLoaded', () => {
     if (statReady) statReady.textContent = String(ready);
   }
 
+  function renderRequests() {
+    if (!requestsTable) return;
+    requestsTable.innerHTML = requestsState.map((request) => `
+      <tr data-id="${request.id}" style="cursor:pointer;">
+        <td>${escapeHtml(request.tracking_code)}</td>
+        <td>${escapeHtml(request.customer_name)}</td>
+        <td>${escapeHtml(request.customer_phone)}</td>
+        <td>${escapeHtml(request.service_name)}</td>
+        <td>${formatDateTime(request.created_at)}</td>
+        <td><span class="status-badge ${statusClass(request.status)}">${escapeHtml(request.status)}</span></td>
+        <td><span class="status-badge ${request.payment_status === 'Ödənilib' ? 'status-hazir' : 'status-yeni'}">${escapeHtml(request.payment_status || 'Ödənilməyib')}</span></td>
+        <td>${Number(request.final_price || request.quoted_price || 0).toFixed(2)} ₼</td>
+        <td><button type="button" class="btn btn-danger btn-sm request-delete-btn" data-delete-request="${request.id}">Sil</button></td>
+      </tr>
+    `).join('');
+
+    requestsTable.querySelectorAll('tr[data-id]').forEach((row) => {
+      row.addEventListener('click', () => openRequestDetail(Number(row.dataset.id)));
+    });
+    requestsTable.querySelectorAll('[data-delete-request]').forEach((button) => {
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        void deleteRequest(Number(button.dataset.deleteRequest));
+      });
+    });
+  }
+
+  async function deleteRequest(id) {
+    if (!window.confirm('Bu müraciəti silmək istədiyinizə əminsinizmi?')) return;
+    try {
+      const response = await fetch(`/api/admin/requests/${id}`, { method: 'DELETE' });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || 'Müraciət silinə bilmədi.');
+      requestsState = requestsState.filter((request) => Number(request.id) !== id);
+      updateStats(requestsState);
+      renderRequests();
+      if (selectedRequestId === id) {
+        selectedRequestId = null;
+        showView('requests');
+      }
+    } catch (error) {
+      console.error('deleteRequest error:', error);
+      window.alert(error.message || 'Müraciət silinə bilmədi.');
+    }
+  }
+
   async function checkAuth() {
     try {
       const response = await fetch('/api/admin/me');
@@ -265,25 +312,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const data = await response.json();
       const requests = Array.isArray(data) ? data : (Array.isArray(data.requests) ? data.requests : []);
-      updateStats(requests);
+      requestsState = requests;
+      updateStats(requestsState);
 
       if (!requestsTable) return;
-      requestsTable.innerHTML = requests.map((request) => `
-        <tr data-id="${request.id}" style="cursor:pointer;">
-          <td>${request.tracking_code}</td>
-          <td>${request.customer_name}</td>
-          <td>${request.customer_phone}</td>
-          <td>${request.service_name}</td>
-          <td>${formatDateTime(request.created_at)}</td>
-          <td><span class="status-badge ${statusClass(request.status)}">${request.status}</span></td>
-          <td><span class="status-badge ${request.payment_status === 'Ödənilib' ? 'status-hazir' : 'status-yeni'}">${request.payment_status || 'Ödənilməyib'}</span></td>
-          <td>${Number(request.final_price || request.quoted_price || 0).toFixed(2)} ₼</td>
-        </tr>
-      `).join('');
-
-      requestsTable.querySelectorAll('tr[data-id]').forEach((row) => {
-        row.addEventListener('click', () => openRequestDetail(Number(row.dataset.id)));
-      });
+      renderRequests();
     } catch (error) {
       console.error('loadRequests error:', error);
     }
