@@ -365,6 +365,15 @@
                   <textarea id="problem_description" name="problem_description" placeholder="Cihazdakı problemi və ya əlavə istəklərinizi ətraflı qeyd edin..." autocomplete="off" aria-label="Problemin təsviri və əlavə qeydlər"></textarea>
                 </div>
 
+                <div class="field request-image-field">
+                  <label for="request-image">📷 Problem olan hissənin şəklini çək və ya yüklə</label>
+                  <input id="request-image" name="image" type="file" accept="image/*" capture="environment" aria-label="Problem olan hissənin şəklini çək və ya yüklə" />
+                  <div id="request-image-preview-wrap" class="request-image-preview-wrap" hidden>
+                    <img id="request-image-preview" class="request-image-preview" alt="Seçilmiş cihaz şəkli" />
+                    <button type="button" id="request-image-remove" class="btn btn-outline btn-sm">Şəkli dəyiş / Yenidən çək</button>
+                  </div>
+                </div>
+
                 <div class="field">
                   <span class="field-label">Ödəniş üsulu</span>
                   <select id="payment_method" name="payment_method" class="sr-only" required autocomplete="off" aria-hidden="true" tabindex="-1">

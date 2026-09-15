@@ -42,9 +42,33 @@
   const statusTimeline = document.getElementById('request-status-timeline');
   const orderSupportLink = document.getElementById('order-support-link');
   const requestSubmitButton = requestForm?.querySelector('button[type="submit"]');
+  const requestImageInput = document.getElementById('request-image');
+  const requestImagePreviewWrap = document.getElementById('request-image-preview-wrap');
+  const requestImagePreview = document.getElementById('request-image-preview');
+  const requestImageRemove = document.getElementById('request-image-remove');
+  let requestImageObjectUrl = null;
   let activeTrackingId = null;
   let requestSubmitting = false;
   let cachedTrackingRequest = null;
+
+  function clearRequestImage() {
+    if (requestImageObjectUrl) URL.revokeObjectURL(requestImageObjectUrl);
+    requestImageObjectUrl = null;
+    if (requestImageInput) requestImageInput.value = '';
+    if (requestImagePreview) requestImagePreview.removeAttribute('src');
+    if (requestImagePreviewWrap) requestImagePreviewWrap.hidden = true;
+  }
+
+  requestImageInput?.addEventListener('change', () => {
+    const file = requestImageInput.files?.[0];
+    if (!file) return clearRequestImage();
+    if (!file.type.startsWith('image/')) return clearRequestImage();
+    if (requestImageObjectUrl) URL.revokeObjectURL(requestImageObjectUrl);
+    requestImageObjectUrl = URL.createObjectURL(file);
+    if (requestImagePreview) requestImagePreview.src = requestImageObjectUrl;
+    if (requestImagePreviewWrap) requestImagePreviewWrap.hidden = false;
+  });
+  requestImageRemove?.addEventListener('click', clearRequestImage);
   orderSupportLink?.addEventListener('click', () => {
     const trackingCode = orderSupportLink.dataset.trackingCode || '';
     const text = trackingCode
@@ -807,10 +831,13 @@
         return;
       }
 
+      const formData = new FormData();
+      Object.entries(payload).forEach(([key, value]) => formData.append(key, String(value)));
+      const imageFile = requestImageInput?.files?.[0];
+      if (imageFile) formData.append('image', imageFile, `${Date.now()}_${imageFile.name}`);
       const response = await fetch('/api/requests', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: formData
       });
       const body = await response.json().catch(() => ({}));
       const isSuccess = response.ok && (body.success !== false) && (!!body.tracking_code || !!body.request_id || !!body.ok);
@@ -824,6 +851,7 @@
       setStoredCustomerIdentity(customerName, customerPhone);
 
       requestForm.reset();
+      clearRequestImage();
       if (paymentMethodSelect) paymentMethodSelect.value = 'later';
       paymentChoiceInputs.forEach((choice) => {
         choice.checked = choice.value === 'later';

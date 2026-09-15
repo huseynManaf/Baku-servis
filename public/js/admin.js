@@ -336,6 +336,18 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('detail-email').value = request.customer_email || '-';
       document.getElementById('detail-device').value = request.device_info || '-';
       document.getElementById('detail-problem-description').value = request.problem_description || 'Əlavə qeyd yoxdur.';
+      const detailImageWrap = document.getElementById('detail-image-wrap');
+      const detailImage = document.getElementById('detail-image');
+      const detailImageLink = document.getElementById('detail-image-link');
+      if (request.image_url) {
+        detailImage.src = request.image_url;
+        detailImageLink.href = request.image_url;
+        detailImageWrap.style.display = 'block';
+      } else {
+        detailImage.removeAttribute('src');
+        detailImageLink.removeAttribute('href');
+        detailImageWrap.style.display = 'none';
+      }
       document.getElementById('detail-service').value = request.service_name || '-';
       document.getElementById('detail-created').value = formatDateTime(request.created_at);
       document.getElementById('detail-status').value = request.status || 'Sifariş qəbul edildi';

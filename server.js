@@ -12,6 +12,8 @@ const nodemailer = require('nodemailer');
 const { Pool } = require('pg');
 const { Server } = require('socket.io');
 const webpush = require('web-push');
+const multer = require('multer');
+const { createClient: createSupabaseClient } = require('@supabase/supabase-js');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -34,6 +36,14 @@ const pool = new Pool({
     ? { rejectUnauthorized: false }
     : undefined,
   max: Number(process.env.DATABASE_POOL_MAX || 10)
+});
+const supabaseStorage = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+  ? createSupabaseClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+  : null;
+const requestImageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (req, file, callback) => callback(null, /^image\/(jpeg|png|webp|heic|heif)$/i.test(file.mimetype))
 });
 pool.on('error', (error) => console.error('PostgreSQL pool error:', error));
 const VAPID_PUBLIC_KEY = String(process.env.VAPID_PUBLIC_KEY || '').trim();
@@ -644,11 +654,13 @@ async function ensurePostgresDatabase() {
   await run(`CREATE TABLE IF NOT EXISTS services (id SERIAL PRIMARY KEY, name TEXT NOT NULL UNIQUE, category TEXT NOT NULL DEFAULT 'Genel', price NUMERIC(12, 2) DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
   await run('ALTER TABLE services ADD COLUMN IF NOT EXISTS price NUMERIC(12, 2) DEFAULT 0');
 
-  const requestSchema = `id SERIAL PRIMARY KEY, tracking_code TEXT UNIQUE NOT NULL, customer_name TEXT NOT NULL, customer_phone TEXT NOT NULL, customer_email TEXT, service_name TEXT NOT NULL, device_model TEXT, device_info TEXT, problem_description TEXT, status TEXT NOT NULL DEFAULT 'Sifariş qəbul edildi', quoted_price NUMERIC(12, 2) DEFAULT 0, final_price NUMERIC(12, 2) DEFAULT 0, is_onsite INTEGER NOT NULL DEFAULT 0, address TEXT, latitude DOUBLE PRECISION, longitude DOUBLE PRECISION, payment_method TEXT NOT NULL DEFAULT 'later', payment_status TEXT NOT NULL DEFAULT 'Ödənilməyib', idempotency_key TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP`;
+  const requestSchema = `id SERIAL PRIMARY KEY, tracking_code TEXT UNIQUE NOT NULL, customer_name TEXT NOT NULL, customer_phone TEXT NOT NULL, customer_email TEXT, service_name TEXT NOT NULL, device_model TEXT, device_info TEXT, problem_description TEXT, image_url TEXT, status TEXT NOT NULL DEFAULT 'Sifariş qəbul edildi', quoted_price NUMERIC(12, 2) DEFAULT 0, final_price NUMERIC(12, 2) DEFAULT 0, is_onsite INTEGER NOT NULL DEFAULT 0, address TEXT, latitude DOUBLE PRECISION, longitude DOUBLE PRECISION, payment_method TEXT NOT NULL DEFAULT 'later', payment_status TEXT NOT NULL DEFAULT 'Ödənilməyib', idempotency_key TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP`;
   await run(`CREATE TABLE IF NOT EXISTS requests (${requestSchema})`);
   await run(`CREATE TABLE IF NOT EXISTS orders (${requestSchema})`);
   await run('ALTER TABLE requests ADD COLUMN IF NOT EXISTS problem_description TEXT');
   await run('ALTER TABLE orders ADD COLUMN IF NOT EXISTS problem_description TEXT');
+  await run('ALTER TABLE requests ADD COLUMN IF NOT EXISTS image_url TEXT');
+  await run('ALTER TABLE orders ADD COLUMN IF NOT EXISTS image_url TEXT');
   await run('ALTER TABLE requests ADD COLUMN IF NOT EXISTS customer_email TEXT');
   await run('ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_email TEXT');
   for (const table of ['requests', 'orders']) {
@@ -799,6 +811,25 @@ function getVisitIpHash(req) {
   const ip = forwardedFor || String(req.socket.remoteAddress || req.ip || 'unknown');
   const salt = process.env.ANALYTICS_HASH_SALT || process.env.SESSION_SECRET || 'bakuservis-analytics-salt';
   return crypto.createHash('sha256').update(`${salt}:${ip}`).digest('hex');
+}
+
+async function storeRequestImage(file, trackingCode) {
+  if (!file) return null;
+  const extension = (file.originalname.split('.').pop() || file.mimetype.split('/')[1] || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const filePath = `${Date.now()}_${trackingCode}.${extension || 'jpg'}`;
+  if (supabaseStorage) {
+    const { error } = await supabaseStorage.storage.from('request-images').upload(filePath, file.buffer, {
+      contentType: file.mimetype,
+      upsert: false
+    });
+    if (error) throw new Error(`Supabase image upload failed: ${error.message}`);
+    const { data } = supabaseStorage.storage.from('request-images').getPublicUrl(filePath);
+    return data.publicUrl;
+  }
+  const uploadDirectory = path.join(__dirname, 'public', 'uploads', 'requests');
+  fs.mkdirSync(uploadDirectory, { recursive: true });
+  fs.writeFileSync(path.join(uploadDirectory, filePath), file.buffer);
+  return `/uploads/requests/${filePath}`;
 }
 
 app.post('/api/site-visits', async (req, res) => {
@@ -1055,7 +1086,7 @@ app.get('/api/orders/live-board', async (req, res) => {
   }
 });
 
-app.post('/api/requests', async (req, res) => {
+app.post('/api/requests', requestImageUpload.single('image'), async (req, res) => {
   try {
     const customer_name = String(req.body.customer_name || '').trim();
     const submittedPhone = sanitizePhoneInput(req.body.customer_phone || '');
@@ -1114,6 +1145,7 @@ app.post('/api/requests', async (req, res) => {
     const tracking_code = generateTrackingCode();
     const timestamp = nowIso();
     const paymentStatus = normalizedPaymentMethod === 'prepay' ? 'Ödənilməyib' : 'Təhvil Veriləndə Ödənəcək';
+    const image_url = await storeRequestImage(req.file, tracking_code);
 
     const requestInsert = [
       tracking_code,
@@ -1124,6 +1156,7 @@ app.post('/api/requests', async (req, res) => {
       device_model || device_info || null,
       device_info || null,
       problem_description || null,
+      image_url,
       'Sifariş qəbul edildi',
       0,
       0,
@@ -1138,15 +1171,15 @@ app.post('/api/requests', async (req, res) => {
       timestamp
     ];
 
-    const orderInsert = [...requestInsert.slice(0, 17), ...requestInsert.slice(18)];
+    const orderInsert = [...requestInsert.slice(0, 18), ...requestInsert.slice(19)];
     const result = await run(`
-      INSERT INTO requests (tracking_code, customer_name, customer_phone, customer_email, service_name, device_model, device_info, problem_description, status, quoted_price, final_price, is_onsite, address, latitude, longitude, payment_method, payment_status, idempotency_key, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO requests (tracking_code, customer_name, customer_phone, customer_email, service_name, device_model, device_info, problem_description, image_url, status, quoted_price, final_price, is_onsite, address, latitude, longitude, payment_method, payment_status, idempotency_key, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, requestInsert);
 
     const orderResult = await run(`
-      INSERT INTO orders (tracking_code, customer_name, customer_phone, customer_email, service_name, device_model, device_info, problem_description, status, quoted_price, final_price, is_onsite, address, latitude, longitude, payment_method, payment_status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO orders (tracking_code, customer_name, customer_phone, customer_email, service_name, device_model, device_info, problem_description, image_url, status, quoted_price, final_price, is_onsite, address, latitude, longitude, payment_method, payment_status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, orderInsert);
 
     emitAdminNotification({
