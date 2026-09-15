@@ -87,6 +87,7 @@ body{
   transition:background .2s ease, color .2s ease;
 }
 *::before, *::after { box-sizing: border-box; }
+.hidden{display:none !important;}
 
 body[data-theme="light"], body.theme-light {
   background:
@@ -162,6 +163,7 @@ body[data-theme="light"] .nav, body.theme-light .nav{background:rgba(255,255,255
 .app-screen[data-screen],#services,#order-section,#my-requests,#contact{scroll-margin-top:80px;}
 .contact-screen{padding:84px 0 56px;}
 .request-image-upload-box{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;min-height:128px;padding:16px;background:#1e293b;border:2px dashed #334155;border-radius:12px;color:var(--text-hi);cursor:pointer;transition:border-color .2s ease,background .2s ease;}
+.request-image-upload-box[hidden],.request-image-preview-wrap[hidden]{display:none !important;}
 .request-image-upload-box:hover,.request-image-upload-box:focus-within{border-color:#06b6d4;background:#233348;}
 .request-image-upload-box strong{font-size:14px;font-weight:600;}
 .request-image-upload-box small{margin-top:4px;color:#94a3b8;font-size:12px;}
