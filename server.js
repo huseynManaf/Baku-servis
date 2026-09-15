@@ -835,11 +835,11 @@ async function storeRequestImage(file, trackingCode) {
 async function removeRequestImage(imageUrl) {
   const value = String(imageUrl || '').trim();
   if (!value) return;
-  if (supabaseStorage) {
+  if (supabaseStorage && !value.startsWith('/uploads/requests/')) {
     const marker = '/request-images/';
     const markerIndex = value.indexOf(marker);
     if (markerIndex >= 0) {
-      const filePath = decodeURIComponent(value.slice(markerIndex + marker.length));
+      const filePath = decodeURIComponent(value.slice(markerIndex + marker.length).split('?')[0]);
       if (filePath) {
         const { error } = await supabaseStorage.storage.from('request-images').remove([filePath]);
         if (error) throw new Error(`Supabase image delete failed: ${error.message}`);
