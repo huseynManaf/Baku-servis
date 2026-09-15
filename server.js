@@ -766,15 +766,15 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.use((req, res, next) => {
   const csp = [
-    "default-src 'self'",
+    "default-src 'self' *",
     "base-uri 'self'",
     "object-src 'none'",
     "frame-ancestors 'none'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https: https://unpkg.com https://cdn.jsdelivr.net",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' *",
+    "style-src 'self' 'unsafe-inline' *",
     "font-src 'self' https://fonts.gstatic.com https://fonts.googleapis.com data:",
     "img-src 'self' data: https: blob:",
-    "connect-src 'self' http://localhost:3000 https: ws: wss:",
+    "connect-src 'self' *",
     "form-action 'self'",
     "frame-src 'self' https://www.google.com https://www.google.com/maps",
     "upgrade-insecure-requests"
