@@ -366,11 +366,22 @@
                 </div>
 
                 <div class="field request-image-field">
-                  <label for="request-image">📷 Problem olan hissənin şəklini çək və ya yüklə</label>
-                  <input id="request-image" name="image" type="file" accept="image/*" aria-label="Problem olan hissənin şəklini çək və ya yüklə" />
+                  <span class="field-label">Cihaz şəkli</span>
+                  <label for="request-image" id="request-image-upload-box" class="request-image-upload-box">
+                    <svg class="request-image-camera-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M4 7.5h3l1.4-2h5.2l1.4 2h3A2 2 0 0 1 20 9.5v8A2 2 0 0 1 18 19.5H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                      <circle cx="12" cy="13.3" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+                    </svg>
+                    <strong>Şəkil çək və ya fayl seç</strong>
+                    <small>Problem olan hissənin şəklini əlavə edin</small>
+                  </label>
+                  <input id="request-image" name="image" type="file" accept="image/*" hidden aria-label="Şəkil çək və ya fayl seç" />
                   <div id="request-image-preview-wrap" class="request-image-preview-wrap" hidden>
                     <img id="request-image-preview" class="request-image-preview" alt="Seçilmiş cihaz şəkli" />
-                    <button type="button" id="request-image-remove" class="btn btn-outline btn-sm">Şəkli dəyiş / Yenidən çək</button>
+                    <div class="request-image-preview-info">
+                      <strong>Şəkil uğurla əlavə olundu</strong>
+                      <button type="button" id="request-image-remove" class="btn btn-outline btn-sm">Şəkli dəyiş / Yenidən çək</button>
+                    </div>
                   </div>
                 </div>
 

@@ -43,6 +43,7 @@
   const orderSupportLink = document.getElementById('order-support-link');
   const requestSubmitButton = requestForm?.querySelector('button[type="submit"]');
   const requestImageInput = document.getElementById('request-image');
+  const requestImageUploadBox = document.getElementById('request-image-upload-box');
   const requestImagePreviewWrap = document.getElementById('request-image-preview-wrap');
   const requestImagePreview = document.getElementById('request-image-preview');
   const requestImageRemove = document.getElementById('request-image-remove');
@@ -57,6 +58,7 @@
     if (requestImageInput) requestImageInput.value = '';
     if (requestImagePreview) requestImagePreview.removeAttribute('src');
     if (requestImagePreviewWrap) requestImagePreviewWrap.hidden = true;
+    if (requestImageUploadBox) requestImageUploadBox.hidden = false;
   }
 
   requestImageInput?.addEventListener('change', () => {
@@ -67,6 +69,7 @@
     requestImageObjectUrl = URL.createObjectURL(file);
     if (requestImagePreview) requestImagePreview.src = requestImageObjectUrl;
     if (requestImagePreviewWrap) requestImagePreviewWrap.hidden = false;
+    if (requestImageUploadBox) requestImageUploadBox.hidden = true;
   });
   requestImageRemove?.addEventListener('click', clearRequestImage);
   orderSupportLink?.addEventListener('click', () => {

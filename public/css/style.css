@@ -161,9 +161,15 @@ body[data-theme="light"] .nav, body.theme-light .nav{background:rgba(255,255,255
 .native-app .app-download-only-web{display:none !important;}
 .app-screen[data-screen],#services,#order-section,#my-requests,#contact{scroll-margin-top:80px;}
 .contact-screen{padding:84px 0 56px;}
-.request-image-field input[type="file"]{width:100%;padding:12px;border:1px dashed rgba(82,208,200,.45);border-radius:12px;background:rgba(82,208,200,.06);color:var(--text-mid);cursor:pointer;}
-.request-image-preview-wrap{display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap;}
-.request-image-preview{width:112px;height:84px;object-fit:cover;border-radius:10px;border:1px solid var(--line);background:var(--ink-900);}
+.request-image-upload-box{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;min-height:128px;padding:16px;background:#1e293b;border:2px dashed #334155;border-radius:12px;color:var(--text-hi);cursor:pointer;transition:border-color .2s ease,background .2s ease;}
+.request-image-upload-box:hover,.request-image-upload-box:focus-within{border-color:#06b6d4;background:#233348;}
+.request-image-upload-box strong{font-size:14px;font-weight:600;}
+.request-image-upload-box small{margin-top:4px;color:#94a3b8;font-size:12px;}
+.request-image-camera-icon{width:30px;height:30px;margin-bottom:8px;color:#67e8f9;}
+.request-image-preview-wrap{display:flex;align-items:center;gap:14px;width:100%;margin-top:12px;padding:10px;background:#1e293b;border:1px solid #475569;border-radius:12px;}
+.request-image-preview{width:80px;height:80px;flex:0 0 80px;object-fit:cover;border-radius:8px;border:1px solid #475569;background:var(--ink-900);}
+.request-image-preview-info{display:flex;flex-direction:column;align-items:flex-start;gap:8px;min-width:0;}
+.request-image-preview-info strong{font-size:13px;color:#a7f3d0;}
 .contact-panel{width:100%;max-width:920px;margin:0 auto;padding:34px;border:1px solid rgba(96,165,250,.2);border-radius:24px;background:linear-gradient(135deg,rgba(18,27,43,.96),rgba(13,20,30,.88));box-shadow:0 24px 54px rgba(2,6,23,.24);box-sizing:border-box;}
 .contact-intro{max-width:650px;}
 .contact-intro h2{font-size:clamp(30px,4vw,44px);line-height:1.08;margin:10px 0 14px;max-width:14ch;}
