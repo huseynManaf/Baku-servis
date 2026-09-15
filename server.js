@@ -858,11 +858,12 @@ app.post('/api/site-visits', async (req, res) => {
   try {
     const rawPath = String(req.body?.path || '/').trim();
     const visitPath = rawPath.startsWith('/') ? rawPath.slice(0, 300) : `/${rawPath.slice(0, 299)}`;
-    await run('INSERT INTO site_visits (path, ip_hash, visit_day, created_at) VALUES (?, ?, CURRENT_DATE, ?)', [visitPath || '/', getVisitIpHash(req), nowIso()]);
-    return res.status(204).end();
+    await run('INSERT INTO site_visits (path, ip_hash, visit_day, created_at) VALUES (?, ?, CURRENT_DATE, ?) ON CONFLICT (ip_hash, visit_day, path) DO NOTHING', [visitPath || '/', getVisitIpHash(req), nowIso()]);
+    return res.status(200).json({ success: true });
   } catch (error) {
+    if (error?.code === '23505') return res.status(200).json({ success: true, status: 'already_tracked' });
     console.error('POST /api/site-visits error:', error);
-    return res.status(204).end();
+    return res.status(500).json({ error: 'Server error' });
   }
 });
 
