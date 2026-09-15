@@ -117,6 +117,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function showView(target) {
     if (!target) return;
+    if (target !== 'detail' && detailView?.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
     if (requestsView) requestsView.style.display = target === 'requests' ? 'block' : 'none';
     if (servicesView) servicesView.style.display = target === 'services' ? 'block' : 'none';
     if (chatsView) chatsView.style.display = target === 'chats' ? 'block' : 'none';
@@ -473,6 +476,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function closeServiceModal() {
     if (!serviceModal) return;
+    if (serviceModal.contains(document.activeElement)) document.activeElement.blur();
     serviceModal.classList.remove('open');
     serviceModal.setAttribute('aria-hidden', 'true');
     const serviceForm = document.getElementById('service-form');
