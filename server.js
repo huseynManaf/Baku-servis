@@ -832,6 +832,28 @@ async function storeRequestImage(file, trackingCode) {
   return `/uploads/requests/${filePath}`;
 }
 
+async function removeRequestImage(imageUrl) {
+  const value = String(imageUrl || '').trim();
+  if (!value) return;
+  if (supabaseStorage) {
+    const marker = '/request-images/';
+    const markerIndex = value.indexOf(marker);
+    if (markerIndex >= 0) {
+      const filePath = decodeURIComponent(value.slice(markerIndex + marker.length));
+      if (filePath) {
+        const { error } = await supabaseStorage.storage.from('request-images').remove([filePath]);
+        if (error) throw new Error(`Supabase image delete failed: ${error.message}`);
+      }
+    }
+    return;
+  }
+  if (!value.startsWith('/uploads/requests/')) return;
+  const relativePath = value.replace(/^\/+/, '');
+  const uploadRoot = path.resolve(__dirname, 'public', 'uploads', 'requests');
+  const filePath = path.resolve(__dirname, 'public', relativePath.replace(/^uploads[\\/]+requests[\\/]+/, 'uploads/requests/'));
+  if (filePath.startsWith(`${uploadRoot}${path.sep}`) && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+}
+
 app.post('/api/site-visits', async (req, res) => {
   try {
     const rawPath = String(req.body?.path || '/').trim();
@@ -1365,6 +1387,9 @@ app.delete('/api/admin/requests/:id', requireAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Müraciət ID-si yanlışdır.' });
+    const request = await get('SELECT image_url FROM requests WHERE id = ?', [id]);
+    if (!request) return res.status(404).json({ error: 'Müraciət tapılmadı.' });
+    await removeRequestImage(request.image_url);
     const result = await run('DELETE FROM requests WHERE id = ?', [id]);
     if (!result.changes) return res.status(404).json({ error: 'Müraciət tapılmadı.' });
     return res.json({ ok: true, id });
