@@ -134,14 +134,13 @@ main,.section,.hero,footer{width:100%;min-width:0;}
 body[data-theme="light"] .nav, body.theme-light .nav{background:rgba(255,255,255,0.82);box-shadow:0 6px 18px rgba(15,23,42,0.08);}
 .nav .container{display:flex;align-items:center;justify-content:space-between;height:72px;}
 .brand{display:flex;align-items:center;gap:10px;font-family:var(--font-display);font-weight:700;font-size:20px;text-decoration:none;color:var(--text-hi);}
-.brand-mark{display:inline-flex;align-items:center;justify-content:center;width:174px;height:46px;border-radius:0;overflow:hidden;box-shadow:none;background:none;border:0;flex-shrink:0;}
+.brand-mark{display:flex;align-items:center;justify-content:flex-start;width:auto;max-width:100%;height:42px;max-height:42px;border-radius:0;overflow:hidden;box-shadow:none;background:none;border:0;flex-shrink:0;}
 .brand-mark svg{display:block;width:100%;height:100%;}
 .brand-mark{background:none;}
 .brand-mark svg{display:none;}
-.brand-mark img{display:block;width:100%;height:100%;object-fit:contain;}
+.brand-mark img{display:block;width:auto;height:42px;max-height:42px;object-fit:contain;}
 .brand .dot{width:9px;height:9px;border-radius:2px;background:var(--amber);transform:rotate(45deg);display:none;}
-.brand-text{letter-spacing:0.11em; font-size: 0.94rem; background:linear-gradient(135deg,#e0f2fe 0%,#7dd3fc 30%,#93c5fd 60%,#a5b4fc 100%); -webkit-background-clip:text; background-clip:text; color:transparent; text-shadow:0 0 18px rgba(125,211,252,0.15);}
-.login-card .brand-mark{width:210px;height:60px;}
+.login-card .brand-mark{height:42px;max-height:42px;}
 #onsite-map {
   min-height: 280px;
   width: 100%;
