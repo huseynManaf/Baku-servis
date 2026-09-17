@@ -1,14 +1,13 @@
-<svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg width="420" height="120" viewBox="0 0 420 120" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bg" x1="18" y1="18" x2="138" y2="142" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#F6B25C"/>
-      <stop offset="0.4" stop-color="#F59E0B"/>
-      <stop offset="0.72" stop-color="#4F8CFF"/>
-      <stop offset="1" stop-color="#52D0C8"/>
+    <linearGradient id="bg" x1="8" y1="8" x2="108" y2="108" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EAF4FF"/>
+      <stop offset="0.45" stop-color="#8BC7FF"/>
+      <stop offset="1" stop-color="#4FACFE"/>
     </linearGradient>
-    <linearGradient id="panel" x1="28" y1="18" x2="130" y2="138" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#0C1320"/>
-      <stop offset="1" stop-color="#111C2B"/>
+    <linearGradient id="panel" x1="8" y1="8" x2="108" y2="108" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#08152E"/>
+      <stop offset="1" stop-color="#020817"/>
     </linearGradient>
     <filter id="softGlow" x="-25%" y="-25%" width="150%" height="150%">
       <feGaussianBlur stdDeviation="5" result="blur"/>
@@ -19,11 +18,14 @@
     </filter>
   </defs>
 
-  <rect x="12" y="12" width="136" height="136" rx="34" fill="url(#panel)"/>
-  <rect x="20" y="20" width="120" height="120" rx="28" fill="url(#bg)" fill-opacity="0.08" stroke="url(#bg)" stroke-opacity="0.42"/>
-
-  <circle cx="80" cy="80" r="44" fill="url(#bg)" fill-opacity="0.08" filter="url(#softGlow)"/>
-
-  <path d="M48 36V124M48 36H82C99 36 111 45 111 60C111 75 99 84 82 84H48M48 84H81C98 84 110 93 110 108C110 123 98 124 81 124H48" stroke="url(#bg)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M102 53L114 80L102 107" stroke="#EAF4FF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+  <circle cx="60" cy="60" r="48" fill="url(#panel)" stroke="url(#bg)" stroke-opacity="0.8" stroke-width="3"/>
+  <circle cx="60" cy="60" r="38" fill="url(#bg)" fill-opacity="0.08"/>
+  <g transform="translate(60 60)" stroke="url(#bg)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M0-30v12M0 18v12M-30 0h12M18 0h12M-21-21l9 9M12 12l9 9M21-21l-9 9M-12 12l-9 9"/>
+    <circle r="17" fill="url(#panel)"/>
+    <path d="M-8 0h16M0-8v16"/>
+  </g>
+  <text x="126" y="57" fill="#F4F8FF" font-family="Arial, sans-serif" font-size="31" font-weight="700" letter-spacing="2">BAKU SERVIS</text>
+  <text x="354" y="57" fill="#8BC7FF" font-family="Arial, sans-serif" font-size="17" font-weight="700">.az</text>
+  <path d="M128 72H389" stroke="url(#bg)" stroke-width="2" stroke-linecap="round" opacity="0.65"/>
 </svg>
